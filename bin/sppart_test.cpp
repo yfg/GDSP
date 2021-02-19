@@ -29,6 +29,8 @@ int main(int argc, char* argv[]){
         ->check(CLI::ExistingFile);
     app.add_option("--npart", nparts, "Number of part for partitioning")
         ->default_val(2);
+    app.add_option("--ub", params.ubfactor, "Unbalance tolerance")
+        ->default_val(1.001);
     app.add_option("--dims", params.n_dims, "Dimension of high dimensional embedding")
         ->default_val(8)
         ->check(CLI::Range(1,1000));

@@ -11,6 +11,7 @@ namespace Sppart{
         int rand_seed = 0;
         int src_alg = 0;
         int bfs_alg = 0;
+        double ubfactor = 1.001;
     };
 
     struct OutputInfo {

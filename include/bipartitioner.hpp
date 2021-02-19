@@ -545,7 +545,8 @@ namespace Sppart {
                 }
                 const int vertex_id = gain_queue.get_top();
 
-                if ( part_weights[to_part] + 1 > target_weights[to_part]) {
+                // if ( part_weights[to_part] + 1 > target_weights[to_part]) {
+                if ( part_weights[to_part] + 1 > g.nv - target_weights[from_part]*params.ubfactor) {
                     break;
                 }
 

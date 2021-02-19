@@ -20,11 +20,17 @@ int main(int argc, char* argv[]){
     
     std::string matrix_file_path = "";
     int nparts = 2;
+    real_t ubfactor = 1.001;
+    int rand_seed = 0;
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
-    app.add_flag("--npart", nparts, "Number of part for partitioning")
+    app.add_option("--npart", nparts, "Number of part for partitioning")
         ->default_val(2);
+    app.add_option("--ub", ubfactor, "Unbalance tolerance")
+        ->default_val(1.001);
+    app.add_option("--seed", rand_seed, "Seed for random number generator")
+        ->default_val(0);
 
     try {
         app.parse(argc, argv);
@@ -59,8 +65,9 @@ int main(int argc, char* argv[]){
     int metis_options[METIS_NOPTIONS];
     ret = METIS_SetDefaultOptions(metis_options);
     // metis_options[METIS_OPTION_DBGLVL] = METIS_DBG_INFO;
+    metis_options[METIS_OPTION_SEED] = rand_seed;
     double metis_time = Sppart::timeit([&]{
-        ret = METIS_PartGraphRecursive(&nvtxs, &ncon, xadj_metis.data(), adjncy.data(), NULL, NULL, NULL, &nparts, NULL, NULL, metis_options, &objval, part.data());
+        ret = METIS_PartGraphRecursive(&nvtxs, &ncon, xadj_metis.data(), adjncy.data(), NULL, NULL, NULL, &nparts, NULL, &ubfactor, metis_options, &objval, part.data());
     });
 
     int cut2 = Sppart::compute_cut(nv, xadj.data(), adjncy.data(), part.data());

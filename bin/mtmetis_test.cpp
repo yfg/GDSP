@@ -24,7 +24,7 @@ int main(int argc, char* argv[]){
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
-    app.add_flag("--npart", nparts, "Number of part for partitioning")
+    app.add_option("--npart", nparts, "Number of part for partitioning")
         ->default_val(2);
 
     try {
