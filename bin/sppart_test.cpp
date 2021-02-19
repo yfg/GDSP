@@ -49,6 +49,8 @@ int main(int argc, char* argv[]){
         ->default_val(0);
     app.add_flag("--use_double_precision", use_double, "Use double precision instead of single precision")
         ->default_val(false);
+    app.add_option("--roundalg", params.round_alg, "Rounding method for initialize partitioning with Fiedler vector")
+        ->default_val(0);
 
     try {
         app.parse(argc, argv);
@@ -107,8 +109,6 @@ int main(int argc, char* argv[]){
         printf("pass count      : %d\n", info.fm_pass_count);
         printf("Spectral cut    : %lld\n", info.spectral_cut);
         printf("Spectral maxbal : %lf\n", info.spectral_maxbal);
-        printf("Balance cut     : %lld\n", info.balance_cut);
-        printf("Balance maxbal  : %lf\n", info.balance_maxbal);
     }
     printf("Final cut       : %lld\n", info.cut);
     printf("Final maxbal    : %lf\n", final_maxbal);
@@ -124,8 +124,7 @@ int main(int argc, char* argv[]){
     printf("        %-12s %10.3lf\n", "XtY", info.time_spectral_XtY);
     printf("        %-12s %10.3lf\n", "eig",info.time_spectral_eig);
     printf("        %-12s %10.3lf\n", "back", info.time_spectral_back);
-    printf("    %-12s %10.3lf\n", "setup", info.time_setup);
-    printf("    %-12s %10.3lf\n", "balance", info.time_balance);
+    printf("        %-12s %10.3lf\n", "round", info.time_spectral_round);
     printf("    %-12s %10.3lf\n", "fm", info.time_fm);
     printf("    %-12s %10.3lf\n", "split", info.time_split);
 
