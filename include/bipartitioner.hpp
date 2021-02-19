@@ -704,7 +704,7 @@ namespace Sppart {
     
                 const int init_cut = cut;
                 int minimum_cut = cut;
-                int minimum_diff = org_diff;
+                int minimum_diff = std::abs(target_weights[0] - part_weights[0]);
                 int i_mincut = -1;
                 int try_count = 0;
 
