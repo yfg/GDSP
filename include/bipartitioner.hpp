@@ -80,8 +80,14 @@ namespace Sppart {
             info.spectral_cut = cut;
             info.spectral_maxbal = get_maxbal();
 
+            set_boundary();
+            info.time_balance += timeit([&]{
+                balance(params.ubfactor); });
+            info.balance_cut = cut;
+            info.balance_maxbal = get_maxbal();
+
             info.time_fm += timeit([&]{
-                info.fm_pass_count = fm_refinement(); });
+                info.fm_pass_count = fm_refinement(params.fm_max_pass); });
             info.cut = cut;
             info.maxbal = get_maxbal();
 
@@ -402,9 +408,11 @@ namespace Sppart {
 
             info.time_spectral_round += timeit([&]{
                 if ( params.round_alg == 0 ){
-                    fiedler_mincut_rounding_partition(Y.get());
+                    fiedler_balanced_min_cut_rounding_partition(Y.get());
                 } else if ( params.round_alg == 1 ){
                     fiedler_sign_rounding_partition(Y.get());
+                } else if ( params.round_alg == 2 ){
+                    fiedler_min_conductance_rounding_partition(Y.get());
                 } else {
                     printf("Error: No such rounding method\n");
                     std::terminate();
@@ -418,11 +426,9 @@ namespace Sppart {
                 bipartition[i] = fv[i] < 0.0 ? 0 : 1;
             }
             setup_partitioning_data();
-            set_boundary();
-            balance();
         }
 
-        void fiedler_mincut_rounding_partition(const FLOAT* const fv){
+        void fiedler_balanced_min_cut_rounding_partition(const FLOAT* const fv){
             int from_part = 0;
             int to_part = 1;
 
@@ -480,8 +486,73 @@ namespace Sppart {
                     external_degrees[j] -= w;
                 }
             }
+        }
 
-            set_boundary();
+        void fiedler_min_conductance_rounding_partition(const FLOAT* const fv){
+            int from_part = 0;
+            int to_part = 1;
+
+            std::vector<int> perm(g.nv);
+            #pragma omp parallel for
+            for (int i = 0; i < g.nv; ++i){
+                perm[i] = i;            
+            }
+
+            std::sort(perm.begin(), perm.end(), [&fv](size_t i1, size_t i2) {
+                return fv[i1] < fv[i2];
+            });
+
+            const int i_start = 1;
+            const int i_end = g.nv - i_start;
+            #pragma omp parallel for
+            for (int i = 0; i < g.nv; ++i){
+                bipartition[perm[i]] = i < i_start ? to_part : from_part;
+            }
+
+            setup_partitioning_data();
+
+            int i_best = i_start;
+            int min_cut = cut;
+            double ratio_cut = cut / std::sqrt((double)std::min(part_weights[0], part_weights[1]));
+            double min_ratio_cut = ratio_cut;
+
+            for (int i = i_start; i < i_end; ++i){
+                const int vertex_id = perm[i];
+                part_weights[from_part] -= 1;
+                part_weights[to_part] += 1;
+                bipartition[vertex_id] = to_part;
+                cut -= external_degrees[vertex_id] - internal_degrees[vertex_id];
+                std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+                for (XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
+                    const int j = g.adjncy[k];
+                    const int w = to_part == bipartition[j] ? 1 : -1;
+                    internal_degrees[j] += w;
+                    external_degrees[j] -= w;
+                }
+
+                ratio_cut = cut / (double)std::min(part_weights[0], part_weights[1]);
+
+                if ( ratio_cut < min_ratio_cut ){
+                    min_ratio_cut = ratio_cut;
+                    i_best = i;
+                    min_cut = cut;
+                }
+            }
+
+            cut = min_cut;
+            for (int i = i_end - 1; i > i_best; --i){
+                const int vertex_id = perm[i];
+                part_weights[from_part] += 1;
+                part_weights[to_part] -= 1;
+                bipartition[vertex_id] = from_part;
+                std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+                for (XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
+                    const int j = g.adjncy[k];
+                    const int w = from_part == bipartition[j] ? 1 : -1;
+                    internal_degrees[j] += w;
+                    external_degrees[j] -= w;
+                }
+            }
         }
 
         void set_boundary(){
@@ -553,7 +624,7 @@ namespace Sppart {
             return (i + 1) % 2;
         }
 
-        void balance(){
+        void balance(const double ubfactor){
             std::array<int, 2> target_weights;
             target_weights[0] = g.nv*target_weights_ratio[0];
             target_weights[1] = g.nv - target_weights[0];
@@ -586,7 +657,7 @@ namespace Sppart {
                 const int vertex_id = gain_queue.get_top();
 
                 // if ( part_weights[to_part] + 1 > target_weights[to_part]) {
-                if ( part_weights[to_part] + 1 > g.nv - target_weights[from_part]*params.ubfactor) {
+                if ( part_weights[to_part] + 1 > g.nv - target_weights[from_part]*ubfactor) {
                     break;
                 }
 
@@ -629,8 +700,8 @@ namespace Sppart {
             }               
         }
 
-        int fm_refinement(){
-            const int max_pass = params.fm_max_pass;
+        int fm_refinement(const int max_pass){
+            // const int max_pass = params.fm_max_pass;
             const bool no_limit = params.fm_no_limit;
             int limit;
             if ( params.fm_limit >= 0 ){
@@ -699,6 +770,8 @@ namespace Sppart {
 
                     if ( (cut < minimum_cut && new_diff <= org_diff + average_weight)
                         || (cut == minimum_cut && new_diff < minimum_diff ) ){ // from Metis
+                    // if ( (cut < minimum_cut && std::max(part_weights[0], part_weights[1]) < g.nv*0.5*params.ubfactor )
+                    //      || (cut == minimum_cut && new_diff < minimum_diff ) ){ // from Metis
                         minimum_cut = cut;
                         minimum_diff = new_diff;
                         i_mincut = i;

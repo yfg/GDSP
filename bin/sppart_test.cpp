@@ -40,7 +40,7 @@ int main(int argc, char* argv[]){
         ->default_val(0);
     app.add_option("--maxpass", params.fm_max_pass, "Maximum number of passes of FM refinement")
         ->default_val(10)
-        ->check(CLI::Range(0,100));
+        ->check(CLI::Range(0,10000));
     app.add_flag("--limit", params.fm_limit, "limit for FM refinement")
         ->default_val(-1);
     app.add_flag("--nolimit", params.fm_no_limit, "Use no limit mode for FM refinement")
@@ -110,6 +110,8 @@ int main(int argc, char* argv[]){
         printf("Spectral cut    : %lld\n", info.spectral_cut);
         printf("Spectral maxbal : %lf\n", info.spectral_maxbal);
     }
+    printf("Balance cut       : %lld\n", info.balance_cut);
+    printf("Balance maxbal    : %lf\n", info.balance_maxbal);
     printf("Final cut       : %lld\n", info.cut);
     printf("Final maxbal    : %lf\n", final_maxbal);
 
@@ -125,6 +127,7 @@ int main(int argc, char* argv[]){
     printf("        %-12s %10.3lf\n", "eig",info.time_spectral_eig);
     printf("        %-12s %10.3lf\n", "back", info.time_spectral_back);
     printf("        %-12s %10.3lf\n", "round", info.time_spectral_round);
+    printf("    %-12s %10.3lf\n", "balance", info.time_balance);
     printf("    %-12s %10.3lf\n", "fm", info.time_fm);
     printf("    %-12s %10.3lf\n", "split", info.time_split);
 
