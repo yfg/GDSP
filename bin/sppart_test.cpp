@@ -41,7 +41,7 @@ int main(int argc, char* argv[]){
     app.add_option("--maxpass", params.fm_max_pass, "Maximum number of passes of FM refinement")
         ->default_val(10)
         ->check(CLI::Range(0,10000));
-    app.add_flag("--limit", params.fm_limit, "limit for FM refinement")
+    app.add_option("--limit", params.fm_limit, "limit for FM refinement")
         ->default_val(-1);
     app.add_flag("--nolimit", params.fm_no_limit, "Use no limit mode for FM refinement")
         ->default_val(false);
