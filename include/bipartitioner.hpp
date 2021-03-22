@@ -104,154 +104,6 @@ namespace Sppart {
 
         protected:
 
-        // Make the graph connected if not
-        // To make connected, add a pseudo vertex as the last vertex of the graph
-        // All connected components will be connected to the pseudo vertex with one edge
-        // So new graph has nv+1 vertices
-        static Graph<XADJ_INT> make_connected_by_func(const int nv, const XADJ_INT* const xadj, const int* const adjncy, bool& is_connected){
-            constexpr int NOT_VISITED = -1;
-            int cnt = 0;
-            int source = 0;
-            int current_component = 0;
-
-            // std::vector<bool> is_source(nv, false);
-            // std::vector<int> component(nv, NOT_VISITED);
-            auto component = std::make_unique<int[]>(nv);
-            auto is_source = std::make_unique<bool[]>(nv);
-            #pragma omp parallel for
-            for (int i = 0; i < nv; ++i){
-                component[i] = NOT_VISITED;
-                is_source[i] = false;
-            }
-
-            while (cnt < nv ){
-                // BFS
-                is_source[source] = true;
-                auto f = [&component,&current_component](int v, float level){
-                    component[v] = current_component;
-                };
-                cnt += bfs_mt_for_func<XADJ_INT, float>(nv, xadj, adjncy, source, f, omp_get_max_threads());
-
-                // Search next source
-                while ( ++source < nv){
-                    if ( component[source] == NOT_VISITED ){
-                        current_component++;
-                        break;
-                    }
-                }
-            }
-
-            const int num_components = current_component + 1;
-            is_connected = num_components == 1;
-
-            if ( num_components > 1 ){
-                auto xadj2 = std::make_unique<XADJ_INT[]>(nv+2);
-                auto adjncy2 = std::make_unique<int[]>(xadj[nv] + 2*(num_components-1));
-                std::vector<int> source_vertex(num_components);
-                cnt = 0;
-                int source_cnt = 0;
-                xadj2[0] = 0;
-                for (int i = 0; i < nv; ++i){
-                    for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
-                        adjncy2[cnt] = adjncy[k];
-                        cnt++;
-                    }
-                    if ( is_source[i] ){
-                        adjncy2[cnt] = nv; // connect to pseudo vertex
-                        source_vertex[source_cnt] = i;
-                        cnt++;
-                        source_cnt++;
-                    }
-                    xadj2[i+1] = cnt;
-                }
-                // Form adjncy for the pseudo vertex
-                for (int c = 0; c < num_components; ++c){
-                    adjncy2[cnt] = source_vertex[c];
-                    cnt++;
-                }
-                xadj2[nv+1] = cnt;
-                return Graph<XADJ_INT>(nv+1, std::move(xadj2), std::move(adjncy2));
-            }else{
-                return Graph<XADJ_INT>(0, nullptr, nullptr);
-            }            
-        }
-
-        // Make the graph connected if not
-        // To make connected, add a pseudo vertex as the last vertex of the graph
-        // All connected components will be connected to the pseudo vertex with one edge
-        // So new graph has nv+1 vertices
-        static Graph<XADJ_INT> make_connected(const int nv, const XADJ_INT* const xadj, const int* const adjncy, bool& is_connected){
-            constexpr int NOT_VISITED = -1;
-            std::vector<int> component(nv, NOT_VISITED);
-            int cnt = 0;
-            int source = 0;
-            int current_component = 0;
-
-            std::vector<bool> is_source(nv, false);
-
-            while (cnt < nv ){
-                // BFS
-                std::queue<int> que;
-                que.push(source);
-                component[source] = current_component;
-                is_source[source] = true;
-                cnt++;
-                while( !que.empty() ){
-                    const int i = que.front();
-                    que.pop();
-                    for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
-                        const int j = adjncy[k];
-                        if ( component[j] != NOT_VISITED ) continue;
-                        component[j] = current_component;
-                        que.push(j);
-                        cnt++;
-                    }
-                }
-
-                // Search next source
-                while ( ++source < nv){
-                    if ( component[source] == NOT_VISITED ){
-                        current_component++;
-                        break;
-                    }
-                }
-            }
-
-            const int num_components = current_component + 1;
-            is_connected = num_components == 1;
-
-            if ( num_components > 1 ){
-                auto xadj2 = std::make_unique<XADJ_INT[]>(nv+2);
-                auto adjncy2 = std::make_unique<int[]>(xadj[nv] + 2*(num_components-1));
-                std::vector<int> source_vertex(num_components);
-                cnt = 0;
-                int source_cnt = 0;
-                xadj2[0] = 0;
-                for (int i = 0; i < nv; ++i){
-                    for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
-                        adjncy2[cnt] = adjncy[k];
-                        cnt++;
-                    }
-                    if ( is_source[i] ){
-                        adjncy2[cnt] = nv; // connect to pseudo vertex
-                        source_vertex[source_cnt] = i;
-                        cnt++;
-                        source_cnt++;
-                    }
-                    xadj2[i+1] = cnt;
-                }
-                // Form adjncy for the pseudo vertex
-                for (int c = 0; c < num_components; ++c){
-                    adjncy2[cnt] = source_vertex[c];
-                    cnt++;
-                }
-                xadj2[nv+1] = cnt;
-                return Graph<XADJ_INT>(nv+1, std::move(xadj2), std::move(adjncy2));
-            }else{
-                return Graph<XADJ_INT>(0, nullptr, nullptr);
-            }            
-        }
-
         void random_source_sssp(const Graph<XADJ_INT>& g, FLOAT* const dists){
             const size_t nv = g.nv; // use size_t type to prevent possible overflow when allocating unique_ptrs.
             const int n_dims = params.n_dims;
@@ -375,35 +227,31 @@ namespace Sppart {
             auto X = std::make_unique<FLOAT[]>(nv*n_dims);
             auto Y = std::make_unique<FLOAT[]>(nv*n_dims);
 
+            compute_ssspd_basis(g, X.get());
+
+            compute_fiedler_rayleigh_ritz(g, X.get(), Y.get());
+
+            fiedler_partition(Y.get());
+        }
+        
+        // compute n_dims vectors of single source shortest path distance (SSSPD)
+        // dists: g.nv x n_dims matrix (column-major) contains SSSPD vectors in its columns
+        void compute_ssspd_basis(const Graph<XADJ_INT>& g, FLOAT* const dists){
             if ( params.src_alg == 0 ){
-                random_source_sssp(g, X.get());
+                random_source_sssp(g, dists);
             }else if ( params.src_alg == 1 ){
-                k_center_source_sssp(g, X.get());
+                k_center_source_sssp(g, dists);
             } else {
                 printf("no such src_alg\n");
                 std::terminate();
             }
-
-            compute_fiedler_rayleigh_ritz(g, n_dims, X.get(), Y.get());
-
-            info.time_spectral_round += timeit([&]{
-                if ( params.round_alg == 0 ){
-                    fiedler_balanced_min_cut_rounding_partition(Y.get());
-                } else if ( params.round_alg == 1 ){
-                    fiedler_sign_rounding_partition(Y.get());
-                } else if ( params.round_alg == 2 ){
-                    fiedler_min_conductance_rounding_partition(Y.get());
-                } else {
-                    printf("Error: No such rounding method\n");
-                    std::terminate();
-                }
-            });
         }
 
         // compute fiedler vector by Rayleigh-Ritz procedure
         // X: g.nv x n_dims matrix. column-major. contains basis for Rayleigh-Ritz in its columns.
         // Y: g.nv x n_dims matrix. column-major. Fiedler vector is returned in the first g.nv elements of Y
-        void compute_fiedler_rayleigh_ritz(const Graph<XADJ_INT>& g, const int n_dims, FLOAT* const X, FLOAT* const Y){
+        void compute_fiedler_rayleigh_ritz(const Graph<XADJ_INT>& g, FLOAT* const X, FLOAT* const Y){
+            const int n_dims = params.n_dims;
             info.time_spectral_sumzero += timeit([&]{
                 make_sum_to_zero(g.nv, n_dims, X); });
 
@@ -425,6 +273,22 @@ namespace Sppart {
                 back_transform(g.nv, 1, n_dims, X, c.data(), Y); });
 
             fix_sign(g.nv, Y);
+        }
+
+        // Determine partition using the fiedler vector
+        void fiedler_partition(const FLOAT* const fv){
+            info.time_spectral_round += timeit([&]{
+                if ( params.round_alg == 0 ){
+                    fiedler_balanced_min_cut_rounding_partition(fv);
+                } else if ( params.round_alg == 1 ){
+                    fiedler_sign_rounding_partition(fv);
+                } else if ( params.round_alg == 2 ){
+                    fiedler_min_conductance_rounding_partition(fv);
+                } else {
+                    printf("Error: No such rounding method\n");
+                    std::terminate();
+                }
+            });
         }
 
         void fiedler_sign_rounding_partition(const FLOAT* const fv){

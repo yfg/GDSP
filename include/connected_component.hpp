@@ -8,6 +8,8 @@
 
 //#include<timers.hpp>
 #include<graph.hpp>
+#include<bfs.hpp>
+#include<omp.h>
 
 namespace Sppart{
 
@@ -203,5 +205,154 @@ namespace Sppart{
         get_largest_connected_component(in_nv, tmp_xadj, tmp_adjncy, out_nv, out_xadj, out_adjncy);
     }
 
+    // Make the graph connected if not
+    // To make connected, add a pseudo vertex as the last vertex of the graph
+    // All connected components will be connected to the pseudo vertex with one edge
+    // So new graph has nv+1 vertices
+    template<class XADJ_INT>
+    Graph<XADJ_INT> make_connected_by_func(const int nv, const XADJ_INT* const xadj, const int* const adjncy, bool& is_connected){
+        constexpr int NOT_VISITED = -1;
+        int cnt = 0;
+        int source = 0;
+        int current_component = 0;
+
+        // std::vector<bool> is_source(nv, false);
+        // std::vector<int> component(nv, NOT_VISITED);
+        auto component = std::make_unique<int[]>(nv);
+        auto is_source = std::make_unique<bool[]>(nv);
+        #pragma omp parallel for
+        for (int i = 0; i < nv; ++i){
+            component[i] = NOT_VISITED;
+            is_source[i] = false;
+        }
+
+        while (cnt < nv ){
+            // BFS
+            is_source[source] = true;
+            auto f = [&component,&current_component](int v, float level){
+                component[v] = current_component;
+            };
+            cnt += bfs_mt_for_func<XADJ_INT, float>(nv, xadj, adjncy, source, f, omp_get_max_threads());
+
+            // Search next source
+            while ( ++source < nv){
+                if ( component[source] == NOT_VISITED ){
+                    current_component++;
+                    break;
+                }
+            }
+        }
+
+        const int num_components = current_component + 1;
+        is_connected = num_components == 1;
+
+        if ( num_components > 1 ){
+            auto xadj2 = std::make_unique<XADJ_INT[]>(nv+2);
+            auto adjncy2 = std::make_unique<int[]>(xadj[nv] + 2*(num_components-1));
+            std::vector<int> source_vertex(num_components);
+            cnt = 0;
+            int source_cnt = 0;
+            xadj2[0] = 0;
+            for (int i = 0; i < nv; ++i){
+                for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
+                    adjncy2[cnt] = adjncy[k];
+                    cnt++;
+                }
+                if ( is_source[i] ){
+                    adjncy2[cnt] = nv; // connect to pseudo vertex
+                    source_vertex[source_cnt] = i;
+                    cnt++;
+                    source_cnt++;
+                }
+                xadj2[i+1] = cnt;
+            }
+            // Form adjncy for the pseudo vertex
+            for (int c = 0; c < num_components; ++c){
+                adjncy2[cnt] = source_vertex[c];
+                cnt++;
+            }
+            xadj2[nv+1] = cnt;
+            return Graph<XADJ_INT>(nv+1, std::move(xadj2), std::move(adjncy2));
+        }else{
+            return Graph<XADJ_INT>(0, nullptr, nullptr);
+        }            
+    }
+
+    // Make the graph connected if not
+    // To make connected, add a pseudo vertex as the last vertex of the graph
+    // All connected components will be connected to the pseudo vertex with one edge
+    // So new graph has nv+1 vertices
+    template<class XADJ_INT>
+    Graph<XADJ_INT> make_connected(const int nv, const XADJ_INT* const xadj, const int* const adjncy, bool& is_connected){
+        constexpr int NOT_VISITED = -1;
+        std::vector<int> component(nv, NOT_VISITED);
+        int cnt = 0;
+        int source = 0;
+        int current_component = 0;
+
+        std::vector<bool> is_source(nv, false);
+
+        while (cnt < nv ){
+            // BFS
+            std::queue<int> que;
+            que.push(source);
+            component[source] = current_component;
+            is_source[source] = true;
+            cnt++;
+            while( !que.empty() ){
+                const int i = que.front();
+                que.pop();
+                for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
+                    const int j = adjncy[k];
+                    if ( component[j] != NOT_VISITED ) continue;
+                    component[j] = current_component;
+                    que.push(j);
+                    cnt++;
+                }
+            }
+
+            // Search next source
+            while ( ++source < nv){
+                if ( component[source] == NOT_VISITED ){
+                    current_component++;
+                    break;
+                }
+            }
+        }
+
+        const int num_components = current_component + 1;
+        is_connected = num_components == 1;
+
+        if ( num_components > 1 ){
+            auto xadj2 = std::make_unique<XADJ_INT[]>(nv+2);
+            auto adjncy2 = std::make_unique<int[]>(xadj[nv] + 2*(num_components-1));
+            std::vector<int> source_vertex(num_components);
+            cnt = 0;
+            int source_cnt = 0;
+            xadj2[0] = 0;
+            for (int i = 0; i < nv; ++i){
+                for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
+                    adjncy2[cnt] = adjncy[k];
+                    cnt++;
+                }
+                if ( is_source[i] ){
+                    adjncy2[cnt] = nv; // connect to pseudo vertex
+                    source_vertex[source_cnt] = i;
+                    cnt++;
+                    source_cnt++;
+                }
+                xadj2[i+1] = cnt;
+            }
+            // Form adjncy for the pseudo vertex
+            for (int c = 0; c < num_components; ++c){
+                adjncy2[cnt] = source_vertex[c];
+                cnt++;
+            }
+            xadj2[nv+1] = cnt;
+            return Graph<XADJ_INT>(nv+1, std::move(xadj2), std::move(adjncy2));
+        }else{
+            return Graph<XADJ_INT>(0, nullptr, nullptr);
+        }            
+    }
 
 }// namespace
