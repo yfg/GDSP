@@ -383,28 +383,8 @@ namespace Sppart {
                 printf("no such src_alg\n");
                 std::terminate();
             }
-            
-            info.time_spectral_sumzero += timeit([&]{
-                make_sum_to_zero(g.nv, n_dims, X.get()); });
 
-            info.time_spectral_orth += timeit([&]{
-                orthonormalize(g.nv, n_dims, X.get()); });
-
-            info.time_spectral_spmm += timeit([&]{
-                mult_laplacian_naive(g.nv, n_dims, g.xadj, g.adjncy, X.get(), Y.get()); });
-
-            std::vector<FLOAT> c(n_dims*n_dims);
-
-            info.time_spectral_XtY += timeit([&]{
-                calc_XtY(g.nv, n_dims, X.get(), Y.get(), c.data()); });
-
-            info.time_spectral_eig += timeit([&]{
-                calc_eigvecs(n_dims, c.data()); });
-
-            info.time_spectral_back += timeit([&]{
-                back_transform(g.nv, 1, n_dims, X.get(), c.data(), Y.get()); });
-
-            fix_sign(g.nv, Y.get());
+            compute_fiedler_rayleigh_ritz(g, n_dims, X.get(), Y.get());
 
             info.time_spectral_round += timeit([&]{
                 if ( params.round_alg == 0 ){
@@ -418,6 +398,33 @@ namespace Sppart {
                     std::terminate();
                 }
             });
+        }
+
+        // compute fiedler vector by Rayleigh-Ritz procedure
+        // X: g.nv x n_dims matrix. column-major. contains basis for Rayleigh-Ritz in its columns.
+        // Y: g.nv x n_dims matrix. column-major. Fiedler vector is returned in the first g.nv elements of Y
+        void compute_fiedler_rayleigh_ritz(const Graph<XADJ_INT>& g, const int n_dims, FLOAT* const X, FLOAT* const Y){
+            info.time_spectral_sumzero += timeit([&]{
+                make_sum_to_zero(g.nv, n_dims, X); });
+
+            info.time_spectral_orth += timeit([&]{
+                orthonormalize(g.nv, n_dims, X); });
+
+            info.time_spectral_spmm += timeit([&]{
+                mult_laplacian_naive(g.nv, n_dims, g.xadj, g.adjncy, X, Y); });
+
+            std::vector<FLOAT> c(n_dims*n_dims);
+
+            info.time_spectral_XtY += timeit([&]{
+                calc_XtY(g.nv, n_dims, X, Y, c.data()); });
+
+            info.time_spectral_eig += timeit([&]{
+                calc_eigvecs(n_dims, c.data()); });
+
+            info.time_spectral_back += timeit([&]{
+                back_transform(g.nv, 1, n_dims, X, c.data(), Y); });
+
+            fix_sign(g.nv, Y);
         }
 
         void fiedler_sign_rounding_partition(const FLOAT* const fv){
