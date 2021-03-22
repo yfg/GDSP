@@ -40,6 +40,10 @@ namespace Sppart{
         std::vector<FT> work(lwork);
         // real run
         lapack::geqrf(&m, &n, A, &m, tau.data(), work.data(), &lwork, &info);
+        if ( info != 0 ){
+            printf("Error: Lapack geqrf 1 error! info = %d\n", info);
+            std::terminate();
+        }
 
         lwork = -1;
         // working space query
@@ -48,6 +52,10 @@ namespace Sppart{
         work.resize(lwork);
         // real run
         lapack::ungqr(&m, &n, &n, A, &m, tau.data(), work.data(), &lwork, &info);
+        if ( info != 0 ){
+            printf("Error: Lapack geqrf 2 error! info = %d\n", info);
+            std::terminate();
+        }
 
         return;
     }
@@ -88,9 +96,18 @@ namespace Sppart{
         std::vector<FT> eigval(n);
         // working space query
         lapack::heev(&jobz, &uplo, &n, A, &n, eigval.data(), &tmp, &lwork, &dummy, &info);
+        if ( info != 0 ){
+            printf("Error: Lapack heev 1 error! info = %d\n", info);
+            std::terminate();
+        }
+
         lwork = static_cast<int>(tmp);
         std::vector<FT> work(lwork);
         lapack::heev(&jobz, &uplo, &n, A, &n, eigval.data(), work.data(), &lwork, &dummy, &info);
+        if ( info != 0 ){
+            printf("Error: Lapack heev 2 error! info = %d\n", info);
+            std::terminate();
+        }
         return;
     }
     
