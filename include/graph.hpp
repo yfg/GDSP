@@ -39,6 +39,48 @@ namespace Sppart {
             up_adjncy.release();
         }
 
+        Graph<XADJ_INT> create_subgraph(std::function<bool(int)> is_subgraph_vertex) const {
+            auto sub_index = std::make_unique<int[]>(nv);
+
+            int vertex_cnt = 0;
+            XADJ_INT nnz_cnt = 0;            
+            for (int i = 0; i < nv; ++i){
+                if ( is_subgraph_vertex(i) ){
+                    for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
+                        const int j = adjncy[k];
+                        if ( is_subgraph_vertex(j) ){                            
+                            nnz_cnt++;
+                        }
+                    }
+                    sub_index[i] = vertex_cnt;
+                    vertex_cnt++;
+                }
+            }
+
+            const int sub_nv = vertex_cnt;
+            auto sub_xadj = std::make_unique<int[]>(sub_nv+1);
+            auto sub_adjncy = std::make_unique<XADJ_INT[]>(nnz_cnt);            
+
+            vertex_cnt = 0;
+            nnz_cnt = 0;
+            sub_xadj[0] = 0;
+            for (int i = 0; i < nv; ++i){
+                if ( is_subgraph_vertex(i) ){
+                    for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
+                        const int j = adjncy[k];
+                        if ( is_subgraph_vertex(j) ){
+                            sub_adjncy[nnz_cnt] = sub_index[j];
+                            nnz_cnt++;
+                        }
+                    }
+                    vertex_cnt++;
+                    sub_xadj[vertex_cnt] = nnz_cnt;
+                }
+            }
+
+            return Graph<XADJ_INT>(sub_nv, std::move(sub_xadj), std::move(sub_adjncy));
+        }
+
         Graph(const Graph&) = delete;
         Graph& operator=(const Graph&) = delete;
 
