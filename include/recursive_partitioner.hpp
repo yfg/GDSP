@@ -32,11 +32,13 @@ namespace Sppart {
             }
             target_bipart_weights_ratio[1] = 1.0 - target_bipart_weights_ratio[0];
 
-            Sppart::SpectralBipartitioner<XADJ_INT, FLOAT> bipartitioner(g, params, target_bipart_weights_ratio.data(), rand_engine, info);
+            Timer timer_spectral; timer_spectral.start();
+            SpectralBipartitioner<XADJ_INT, FLOAT> bipartitioner = SpectralBipartitioner<XADJ_INT, FLOAT>::run_partitioning(g, params, target_bipart_weights_ratio.data(), rand_engine, info);
+            timer_spectral.stop(); info.time_spectral += timer_spectral.get_time();
 
-            bipartitioner.run_partitioning(true);
+            partition = bipartitioner.get_partition();
+
             int64_t cut = info.cut;
-            partition = bipartitioner.get_partition();            
 
             if ( n_parts > 2 ){
                 auto label = std::make_unique<int[]>(g.nv);
@@ -92,8 +94,21 @@ namespace Sppart {
             }
             target_bipart_weights_ratio[1] = 1.0 - target_bipart_weights_ratio[0];
 
-            Sppart::SpectralBipartitioner<XADJ_INT, FLOAT> bipartitioner(ag, params, target_bipart_weights_ratio.data(), rand_engine, info);
-            bipartitioner.run_partitioning(false);
+            bool is_connected;
+            Timer timer_connect; timer_connect.start();            
+            const Graph<XADJ_INT> connected_ag = make_connected_by_func(ag.nv, ag.xadj, ag.adjncy, is_connected);
+            timer_connect.stop(); info.time_connect += timer_connect.get_time();
+            // if (!is_connected) printf("Disconnected graph found make connected!!!\n");
+
+            const Graph<XADJ_INT> *ag_ptr = &ag;
+            if ( !is_connected ){
+                ag_ptr = &connected_ag;
+            }
+
+            Timer timer_spectral; timer_spectral.start();
+            SpectralBipartitioner<XADJ_INT, FLOAT> bipartitioner = SpectralBipartitioner<XADJ_INT, FLOAT>::run_partitioning(*ag_ptr, params, target_bipart_weights_ratio.data(), rand_engine, info);
+            timer_spectral.stop(); info.time_spectral += timer_spectral.get_time();
+
             int64_t cut = info.cut;
             std::unique_ptr<int[]> bipartition = bipartitioner.get_partition();
             // printf("cut %lld\n", info.cut);

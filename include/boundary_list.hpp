@@ -67,8 +67,8 @@ namespace Sppart {
 
         BoundaryList(const BoundaryList&) = delete;
         BoundaryList& operator=(const BoundaryList&) = delete;
-        BoundaryList(BoundaryList&&) = delete;
-        BoundaryList& operator=(BoundaryList&&) = delete;
+        BoundaryList(BoundaryList&&) = default;
+        BoundaryList& operator=(BoundaryList&&) = default;
     };
 
 }

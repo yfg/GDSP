@@ -41,13 +41,12 @@ namespace Sppart {
     public:
 
         SpectralBipartitioner(const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info)
-        : g(g),
-        params(params),
+        : g(g),        
         blist(g.nv),
         external_degrees(new int[g.nv]),
         internal_degrees(new int[g.nv]),
-        rand_engine(rand_engine),
-        info(info)
+        bipartition(new int[g.nv]),
+        rand_engine(rand_engine), info(info), params(params)
         {
             assert(params.n_dims > 0);
             assert(params.max_fm_pass >= 0);
@@ -55,44 +54,24 @@ namespace Sppart {
             target_weights_ratio[1] = in_target_weights_ratio[1];
         }
 
-        OutputInfo run_partitioning(bool assume_connected){
-            bipartition = std::make_unique<int[]>(g.nv+1); // // +1 is for pseudo vertex
+        static SpectralBipartitioner<XADJ_INT,FLOAT> run_partitioning(const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb = spectral_bipartition(g, params, in_target_weights_ratio, rand_engine, info);
 
-            if ( assume_connected ){
-                info.time_spectral += timeit([&]{
-                    spectral_bipartition(g); 
-                });
-            }else{
-                bool is_connected;
-                Timer timer_connect; timer_connect.start();            
-                // const Graph<XADJ_INT> connected_g = make_connected(g.nv, g.xadj, g.adjncy, is_connected);
-                const Graph<XADJ_INT> connected_g = make_connected_by_func(g.nv, g.xadj, g.adjncy, is_connected);
-                timer_connect.stop(); info.time_connect += timer_connect.get_time();
-                // if (!is_connected) printf("Disconnected graph found make connected!!!\n");
-                info.time_spectral += timeit([&]{
-                    if ( is_connected ){
-                        spectral_bipartition(g); 
-                    }else{
-                        spectral_bipartition(connected_g); 
-                    }
-                });
-            }
+            info.spectral_cut = spb.cut;
+            info.spectral_maxbal = spb.get_maxbal();
 
-            info.spectral_cut = cut;
-            info.spectral_maxbal = get_maxbal();
-
-            set_boundary();
+            spb.set_boundary();
             info.time_balance += timeit([&]{
-                balance(params.ubfactor); });
-            info.balance_cut = cut;
-            info.balance_maxbal = get_maxbal();
+                spb.balance(params.ubfactor); });
+            info.balance_cut = spb.cut;
+            info.balance_maxbal = spb.get_maxbal();
 
             info.time_fm += timeit([&]{
-                info.fm_pass_count = fm_refinement(params.fm_max_pass); });
-            info.cut = cut;
-            info.maxbal = get_maxbal();
+                info.fm_pass_count = spb.fm_refinement(params.fm_max_pass); });
+            info.cut = spb.cut;
+            info.maxbal = spb.get_maxbal();
 
-            return info;
+            return spb;
         }
 
         std::unique_ptr<int[]> get_partition(){
@@ -105,8 +84,7 @@ namespace Sppart {
 
         protected:
 
-
-        void spectral_bipartition(const Graph<XADJ_INT>& g){
+        static SpectralBipartitioner<XADJ_INT,FLOAT> spectral_bipartition(const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
             const int n_dims = params.n_dims;
             const size_t nv = g.nv; // prevent possible overflow when allocating unique_ptrs.
 
@@ -115,16 +93,19 @@ namespace Sppart {
 
             compute_ssspd_basis(g, X.get(), params, rand_engine, info);
 
-            compute_fiedler_rayleigh_ritz(g, X.get(), Y.get());
+            compute_fiedler_rayleigh_ritz(params.n_dims, g, X.get(), Y.get(), info);
 
-            fiedler_partition(Y.get());
+            Timer timer_round; timer_round.start();
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb = fiedler_partition(Y.get(), g, params, in_target_weights_ratio, rand_engine, info);
+            timer_round.stop(); info.time_spectral_round += timer_round.get_time();
+
+            return spb;
         }
         
         // compute fiedler vector by Rayleigh-Ritz procedure
         // X: g.nv x n_dims matrix. column-major. contains basis for Rayleigh-Ritz in its columns.
         // Y: g.nv x n_dims matrix. column-major. Fiedler vector is returned in the first g.nv elements of Y
-        void compute_fiedler_rayleigh_ritz(const Graph<XADJ_INT>& g, FLOAT* const X, FLOAT* const Y){
-            const int n_dims = params.n_dims;
+        static void compute_fiedler_rayleigh_ritz(const int n_dims, const Graph<XADJ_INT>& g, FLOAT* const X, FLOAT* const Y, OutputInfo& info){
             info.time_spectral_sumzero += timeit([&]{
                 make_sum_to_zero(g.nv, n_dims, X); });
 
@@ -149,30 +130,31 @@ namespace Sppart {
         }
 
         // Determine partition using the fiedler vector
-        void fiedler_partition(const FLOAT* const fv){
-            info.time_spectral_round += timeit([&]{
-                if ( params.round_alg == 0 ){
-                    fiedler_balanced_min_cut_rounding_partition(fv);
-                } else if ( params.round_alg == 1 ){
-                    fiedler_sign_rounding_partition(fv);
-                } else if ( params.round_alg == 2 ){
-                    fiedler_min_conductance_rounding_partition(fv);
-                } else {
-                    printf("Error: No such rounding method\n");
-                    std::terminate();
-                }
-            });
+        static SpectralBipartitioner<XADJ_INT,FLOAT> fiedler_partition(const FLOAT* const fv, const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            if ( params.round_alg == 0 ){
+                return fiedler_balanced_min_cut_rounding_partition(fv, g, params, in_target_weights_ratio, rand_engine, info);
+            } else if ( params.round_alg == 1 ){
+                return fiedler_sign_rounding_partition(fv, g, params, in_target_weights_ratio, rand_engine, info);
+            } else if ( params.round_alg == 2 ){
+                return fiedler_min_conductance_rounding_partition(fv, g, params, in_target_weights_ratio, rand_engine, info);
+            } else {
+                printf("Error: No such rounding method\n");
+                std::terminate();
+            }                
         }
 
-        void fiedler_sign_rounding_partition(const FLOAT* const fv){
+        static SpectralBipartitioner<XADJ_INT,FLOAT> fiedler_sign_rounding_partition(const FLOAT* const fv, const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb(g, params, in_target_weights_ratio, rand_engine, info);
             #pragma omp parallel for
             for (int i = 0; i < g.nv; ++i){
-                bipartition[i] = fv[i] < 0.0 ? 0 : 1;
+                spb.bipartition[i] = fv[i] < 0.0 ? 0 : 1;
             }
-            setup_partitioning_data();
+            spb.setup_partitioning_data();
+            return spb;
         }
 
-        void fiedler_balanced_min_cut_rounding_partition(const FLOAT* const fv){
+        static SpectralBipartitioner<XADJ_INT,FLOAT> fiedler_balanced_min_cut_rounding_partition(const FLOAT* const fv, const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb(g, params, in_target_weights_ratio, rand_engine, info);
             int from_part = 0;
             int to_part = 1;
 
@@ -190,49 +172,52 @@ namespace Sppart {
             const int i_end = g.nv - i_start;
             #pragma omp parallel for
             for (int i = 0; i < g.nv; ++i){
-                bipartition[perm[i]] = i < i_start ? to_part : from_part;
+                spb.bipartition[perm[i]] = i < i_start ? to_part : from_part;
             }
 
-            setup_partitioning_data();
+            spb.setup_partitioning_data();
 
             int i_best = i_start;
-            int min_cut = cut;
+            int min_cut = spb.cut;
             for (int i = i_start; i < i_end; ++i){
                 const int vertex_id = perm[i];
-                part_weights[from_part] -= 1;
-                part_weights[to_part] += 1;
-                bipartition[vertex_id] = to_part;
-                cut -= external_degrees[vertex_id] - internal_degrees[vertex_id];
-                std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+                spb.part_weights[from_part] -= 1;
+                spb.part_weights[to_part] += 1;
+                spb.bipartition[vertex_id] = to_part;
+                spb.cut -= spb.external_degrees[vertex_id] - spb.internal_degrees[vertex_id];
+                std::swap(spb.external_degrees[vertex_id], spb.internal_degrees[vertex_id]);
                 for (XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
                     const int j = g.adjncy[k];
-                    const int w = to_part == bipartition[j] ? 1 : -1;
-                    internal_degrees[j] += w;
-                    external_degrees[j] -= w;
+                    const int w = to_part == spb.bipartition[j] ? 1 : -1;
+                    spb.internal_degrees[j] += w;
+                    spb.external_degrees[j] -= w;
                 }
-                if ( cut < min_cut ){
-                    min_cut = cut;
+                if ( spb.cut < min_cut ){
+                    min_cut = spb.cut;
                     i_best = i;
                 }
             }
 
-            cut = min_cut;
+            spb.cut = min_cut;
             for (int i = i_end - 1; i > i_best; --i){
                 const int vertex_id = perm[i];
-                part_weights[from_part] += 1;
-                part_weights[to_part] -= 1;
-                bipartition[vertex_id] = from_part;
-                std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+                spb.part_weights[from_part] += 1;
+                spb.part_weights[to_part] -= 1;
+                spb.bipartition[vertex_id] = from_part;
+                std::swap(spb.external_degrees[vertex_id], spb.internal_degrees[vertex_id]);
                 for (XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
                     const int j = g.adjncy[k];
-                    const int w = from_part == bipartition[j] ? 1 : -1;
-                    internal_degrees[j] += w;
-                    external_degrees[j] -= w;
+                    const int w = from_part == spb.bipartition[j] ? 1 : -1;
+                    spb.internal_degrees[j] += w;
+                    spb.external_degrees[j] -= w;
                 }
             }
+
+            return spb;
         }
 
-        void fiedler_min_conductance_rounding_partition(const FLOAT* const fv){
+        static SpectralBipartitioner<XADJ_INT,FLOAT> fiedler_min_conductance_rounding_partition(const FLOAT* const fv, const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb(g, params, in_target_weights_ratio, rand_engine, info);
             int from_part = 0;
             int to_part = 1;
 
@@ -250,53 +235,55 @@ namespace Sppart {
             const int i_end = g.nv - i_start;
             #pragma omp parallel for
             for (int i = 0; i < g.nv; ++i){
-                bipartition[perm[i]] = i < i_start ? to_part : from_part;
+                spb.bipartition[perm[i]] = i < i_start ? to_part : from_part;
             }
 
-            setup_partitioning_data();
+            spb.setup_partitioning_data();
 
             int i_best = i_start;
-            int min_cut = cut;
-            double ratio_cut = cut / std::sqrt((double)std::min(part_weights[0], part_weights[1]));
+            int min_cut = spb.cut;
+            double ratio_cut = spb.cut / std::sqrt((double)std::min(spb.part_weights[0], spb.part_weights[1]));
             double min_ratio_cut = ratio_cut;
 
             for (int i = i_start; i < i_end; ++i){
                 const int vertex_id = perm[i];
-                part_weights[from_part] -= 1;
-                part_weights[to_part] += 1;
-                bipartition[vertex_id] = to_part;
-                cut -= external_degrees[vertex_id] - internal_degrees[vertex_id];
-                std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+                spb.part_weights[from_part] -= 1;
+                spb.part_weights[to_part] += 1;
+                spb.bipartition[vertex_id] = to_part;
+                spb.cut -= spb.external_degrees[vertex_id] - spb.internal_degrees[vertex_id];
+                std::swap(spb.external_degrees[vertex_id], spb.internal_degrees[vertex_id]);
                 for (XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
                     const int j = g.adjncy[k];
-                    const int w = to_part == bipartition[j] ? 1 : -1;
-                    internal_degrees[j] += w;
-                    external_degrees[j] -= w;
+                    const int w = to_part == spb.bipartition[j] ? 1 : -1;
+                    spb.internal_degrees[j] += w;
+                    spb.external_degrees[j] -= w;
                 }
 
-                ratio_cut = cut / (double)std::min(part_weights[0], part_weights[1]);
+                ratio_cut = spb.cut / (double)std::min(spb.part_weights[0], spb.part_weights[1]);
 
                 if ( ratio_cut < min_ratio_cut ){
                     min_ratio_cut = ratio_cut;
                     i_best = i;
-                    min_cut = cut;
+                    min_cut = spb.cut;
                 }
             }
 
-            cut = min_cut;
+            spb.cut = min_cut;
             for (int i = i_end - 1; i > i_best; --i){
                 const int vertex_id = perm[i];
-                part_weights[from_part] += 1;
-                part_weights[to_part] -= 1;
-                bipartition[vertex_id] = from_part;
-                std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+                spb.part_weights[from_part] += 1;
+                spb.part_weights[to_part] -= 1;
+                spb.bipartition[vertex_id] = from_part;
+                std::swap(spb.external_degrees[vertex_id], spb.internal_degrees[vertex_id]);
                 for (XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
                     const int j = g.adjncy[k];
-                    const int w = from_part == bipartition[j] ? 1 : -1;
-                    internal_degrees[j] += w;
-                    external_degrees[j] -= w;
+                    const int w = from_part == spb.bipartition[j] ? 1 : -1;
+                    spb.internal_degrees[j] += w;
+                    spb.external_degrees[j] -= w;
                 }
             }
+
+            return spb;
         }
 
         void set_boundary(){
@@ -347,21 +334,23 @@ namespace Sppart {
             return static_cast<double>(max_part_weight) / static_cast<double>(ave);
         }
 
-        void random_partition(int seed){
+        static SpectralBipartitioner<XADJ_INT,FLOAT> random_partition(const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb(g, params, in_target_weights_ratio, rand_engine, info);
+
             std::uniform_int_distribution<> ud(0, 1);
             int cnt = 0;
             for (int i = 0; i < g.nv; ++i){
                 if ( cnt < g.nv/2 ) {
                     const int part = ud(rand_engine);
-                    bipartition[i] = part;
+                    spb.bipartition[i] = part;
                     if ( part == 0 ){
                         cnt++;
                     }
                 }else{
-                    bipartition[i] = 1;
+                    spb.bipartition[i] = 1;
                 }
             }
-            return;
+            return spb;
         }
 
         static inline int other(int i){
@@ -615,7 +604,9 @@ namespace Sppart {
 
         SpectralBipartitioner(const SpectralBipartitioner&) = delete;
         SpectralBipartitioner& operator=(const SpectralBipartitioner&) = delete;
-        SpectralBipartitioner(SpectralBipartitioner&&) = delete;
+
+        public:
+        SpectralBipartitioner(SpectralBipartitioner&&) = default;
         SpectralBipartitioner& operator=(SpectralBipartitioner&&) = delete;
     };
 }
