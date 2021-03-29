@@ -56,6 +56,7 @@ namespace Sppart {
 
         static SpectralBipartitioner<XADJ_INT,FLOAT> run_partitioning(const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
             SpectralBipartitioner<XADJ_INT,FLOAT> spb = spectral_bipartition(g, params, in_target_weights_ratio, rand_engine, info);
+            // SpectralBipartitioner<XADJ_INT,FLOAT> spb = spectral_bipartition_experimental_subgraph_selecting(g, params, in_target_weights_ratio, rand_engine, info);
 
             info.spectral_cut = spb.cut;
             info.spectral_maxbal = spb.get_maxbal();
@@ -102,6 +103,115 @@ namespace Sppart {
             return spb;
         }
         
+        // This funciton implements a method presented in Lemma A.1. of [Spielman et al., Spectral partitioning works: Planar graphs and finite element meshes, 2007]
+        static SpectralBipartitioner<XADJ_INT,FLOAT> spectral_bipartition_experimental_subgraph_selecting(const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            const int n_dims = params.n_dims;
+            const size_t nv = g.nv; // prevent possible overflow when allocating unique_ptrs.
+
+            auto X = std::make_unique<FLOAT[]>(nv*n_dims);
+            auto Y = std::make_unique<FLOAT[]>(nv*n_dims);
+            compute_ssspd_basis(g, X.get(), params, rand_engine, info);
+            compute_fiedler_rayleigh_ritz(params.n_dims, g, X.get(), Y.get(), info);
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb = fiedler_partition(Y.get(), g, params, in_target_weights_ratio, rand_engine, info);
+            X.release();
+            Y.release();
+
+            // printf("org cut %d, maxbal %f\n", spb.cut, spb.get_maxbal());
+            spb.set_boundary();
+            spb.fm_refinement(params.fm_max_pass);
+            // printf("org fm cut %d, maxbal %f\n", spb.cut, spb.get_maxbal());
+
+            fflush(stdout);
+            if ( spb.get_maxbal() < params.ubfactor ){
+                return spb;
+            }
+            int smaller_part = spb.part_weights[0] <= spb.part_weights[1] ? 1 : 0;
+            int larger_part = other(smaller_part);
+            int smaller_count = 0;
+            int larger_count = spb.part_weights[larger_part];
+            
+            auto sub_g = std::make_unique<Graph<XADJ_INT>>(g.create_subgraph([&](int i)->bool{return spb.bipartition[i]==smaller_part;}));
+            for (int i = 0; i < g.nv; ++i){
+                spb.bipartition[i] = spb.bipartition[i] == larger_part ? larger_part : -1;
+            }
+            auto org_idx = std::make_unique<int[]>(sub_g->nv);
+            int cnt = 0;
+            for (int i = 0; i < nv; ++i){
+                if ( spb.bipartition[i] == -1 ){
+                    org_idx[cnt] = i;
+                    cnt++;
+                }
+            }
+            // printf("nv small large sum %d %d %d %d %d %d\n", g.nv, smaller_part, smaller_count, larger_part, larger_count, smaller_count + larger_count);
+            while( 1 ){
+                const size_t sub_nv = sub_g->nv;
+                auto X = std::make_unique<FLOAT[]>(sub_nv*n_dims);
+                auto Y = std::make_unique<FLOAT[]>(sub_nv*n_dims);
+
+                // printf("connected ? %d\n", check_connected(sub_g->nv, sub_g->xadj, sub_g->adjncy));
+                compute_ssspd_basis(*sub_g, X.get(), params, rand_engine, info);
+                compute_fiedler_rayleigh_ritz(params.n_dims, *sub_g, X.get(), Y.get(), info);
+                SpectralBipartitioner<XADJ_INT,FLOAT> sub_spb = fiedler_min_conductance_rounding_partition(Y.get(), *sub_g, params, in_target_weights_ratio, rand_engine, info);
+
+                // printf("sub nv %d\n", sub_nv);
+                // printf("sub cut %d, maxbal %f\n", sub_spb.cut, sub_spb.get_maxbal());
+                sub_spb.set_boundary();
+                sub_spb.fm_refinement(params.fm_max_pass);
+                // printf("sub fm cut %d, maxbal %f\n", sub_spb.cut, sub_spb.get_maxbal());
+
+                int sub_smaller_part = sub_spb.part_weights[0] <= sub_spb.part_weights[1] ? 0 : 1;
+                int sub_larger_part = other(sub_smaller_part);
+                for (int i = 0; i < sub_nv; ++i){
+                    if ( sub_spb.bipartition[i] == sub_smaller_part ){
+                        if ( spb.bipartition[org_idx[i]] != -1 ){
+                            printf("!!!! Error %d\n", i);
+                            std::terminate();
+                        }
+                        spb.bipartition[org_idx[i]] = smaller_part;
+                    }
+                }
+                smaller_count += sub_spb.part_weights[sub_smaller_part];
+                if ( smaller_count > larger_count){
+                    std::swap(smaller_part, larger_part);
+                    std::swap(smaller_count, larger_count);
+                }
+                // printf("nv small large sum %d %d %d %d %d %d\n", g.nv, smaller_part, smaller_count, larger_part, larger_count, smaller_count + larger_count);
+                // printf("org maxbal %f\n", ((double)(g.nv - smaller_count)) / (0.5*g.nv));
+                if ( ((double)(g.nv - smaller_count)) / (0.5*g.nv) < params.ubfactor ){
+                    for (int i = 0; i < sub_nv; ++i){
+                        if ( sub_spb.bipartition[i] == sub_larger_part ){
+                            if ( spb.bipartition[org_idx[i]] != -1 ){
+                                printf("!!!! Error %d\n", i);
+                                std::terminate();
+                            }
+                            spb.bipartition[org_idx[i]] = larger_part;
+                        }
+                    }                                        
+                    break;
+                }
+                sub_g = std::make_unique<Graph<XADJ_INT>>(sub_g->create_subgraph([&](int i)->bool{return sub_spb.bipartition[i]==sub_larger_part;}));
+                auto new_org_idx = std::make_unique<int[]>(sub_g->nv);
+                int cnt = 0;
+                for (int i = 0; i < sub_nv; ++i){
+                    if ( sub_spb.bipartition[i] == sub_larger_part ){
+                        new_org_idx[cnt] = org_idx[i];
+                        cnt++;
+                    }
+                }
+                org_idx = std::move(new_org_idx);
+            }
+
+            for (int i = 0; i < g.nv; ++i){
+                if ( spb.bipartition[i] == -1 ){
+                    printf("!!!! Error %d\n", i);
+                    std::terminate();
+                }
+            }
+            spb.setup_partitioning_data();
+            // printf("org cut %d, maxbal %f\n", spb.cut, spb.get_maxbal());
+            return spb;
+        }
+
         // compute fiedler vector by Rayleigh-Ritz procedure
         // X: g.nv x n_dims matrix. column-major. contains basis for Rayleigh-Ritz in its columns.
         // Y: g.nv x n_dims matrix. column-major. Fiedler vector is returned in the first g.nv elements of Y
