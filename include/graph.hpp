@@ -81,6 +81,10 @@ namespace Sppart {
             return Graph<XADJ_INT>(sub_nv, std::move(sub_xadj), std::move(sub_adjncy));
         }
 
+        XADJ_INT degree(int v) const {
+            return xadj[v+1] - xadj[v];
+        }
+
         Graph(const Graph&) = delete;
         Graph& operator=(const Graph&) = delete;
 

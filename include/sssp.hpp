@@ -1,6 +1,8 @@
 #include<params.hpp>
 #include<graph.hpp>
 
+#include "gapbs/bfs.h"
+
 namespace Sppart {
     template<class XADJ_INT, class FLOAT>
     void random_source_sssp(const Graph<XADJ_INT>& g, FLOAT* const dists, const InputParams& params, std::mt19937& rand_engine, OutputInfo& info){
@@ -101,7 +103,14 @@ namespace Sppart {
         int source = ud(rand_engine);
         for (int i = 0; i < n_dims; ++i){
             info.time_spectral_bfs += timeit([&]{
-                bfs_mt_for(g.nv, g.xadj, g.adjncy, source, &dists[i*nv], omp_get_max_threads());
+                if ( params.bfs_alg == 0 ) {
+                    bfs_mt_for(g.nv, g.xadj, g.adjncy, source, &dists[i*nv], omp_get_max_threads());
+                } else if ( params.bfs_alg == 1 ) {
+                    gapbs::DOBFS(g, source, &dists[i*nv]);
+                } else {
+                    printf("no such bfs_alg\n");
+                    std::terminate();                    
+                }
             });
             if ( i == n_dims - 1) break;
             #pragma omp parallel for
