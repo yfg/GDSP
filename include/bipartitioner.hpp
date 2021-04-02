@@ -49,7 +49,7 @@ namespace Sppart {
         rand_engine(rand_engine), info(info), params(params)
         {
             assert(params.n_dims > 0);
-            assert(params.max_fm_pass >= 0);
+            assert(params.fm_max_pass >= 0);
             target_weights_ratio[0] = in_target_weights_ratio[0];
             target_weights_ratio[1] = in_target_weights_ratio[1];
         }
