@@ -6,6 +6,11 @@
 
 namespace Sppart {
 
+    template<class TYPE>
+    std::unique_ptr<TYPE[]> create_up_array(size_t n){
+        return std::unique_ptr<TYPE[]>(new TYPE[n]);
+    }
+    
     class Timer{
     private:
         std::chrono::system_clock::time_point start_point;

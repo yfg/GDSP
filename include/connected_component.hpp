@@ -6,7 +6,7 @@
 #include <vector>
 #include <queue>
 
-//#include<timers.hpp>
+#include<util.hpp>
 #include<graph.hpp>
 #include<bfs.hpp>
 #include<omp.h>
@@ -218,8 +218,8 @@ namespace Sppart{
 
         // std::vector<bool> is_source(nv, false);
         // std::vector<int> component(nv, NOT_VISITED);
-        auto component = std::make_unique<int[]>(nv);
-        auto is_source = std::make_unique<bool[]>(nv);
+        auto component = create_up_array<int>(nv);
+        auto is_source = create_up_array<bool>(nv);
         #pragma omp parallel for
         for (int i = 0; i < nv; ++i){
             component[i] = NOT_VISITED;
@@ -247,8 +247,8 @@ namespace Sppart{
         is_connected = num_components == 1;
 
         if ( num_components > 1 ){
-            auto xadj2 = std::make_unique<XADJ_INT[]>(nv+2);
-            auto adjncy2 = std::make_unique<int[]>(xadj[nv] + 2*(num_components-1));
+            auto xadj2 = create_up_array<XADJ_INT>(nv+2);
+            auto adjncy2 = create_up_array<int>(xadj[nv] + 2*(num_components-1));
             std::vector<int> source_vertex(num_components);
             cnt = 0;
             int source_cnt = 0;
@@ -324,8 +324,8 @@ namespace Sppart{
         is_connected = num_components == 1;
 
         if ( num_components > 1 ){
-            auto xadj2 = std::make_unique<XADJ_INT[]>(nv+2);
-            auto adjncy2 = std::make_unique<int[]>(xadj[nv] + 2*(num_components-1));
+            auto xadj2 = create_up_array<XADJ_INT>(nv+2);
+            auto adjncy2 = create_up_array<int>(xadj[nv] + 2*(num_components-1));
             std::vector<int> source_vertex(num_components);
             cnt = 0;
             int source_cnt = 0;

@@ -93,7 +93,7 @@ namespace Sppart {
         const int n_dims = params.n_dims;
         std::vector<int> sources(n_dims);
         std::uniform_int_distribution<> ud(0, nv-1);
-        auto dd = std::make_unique<FLOAT[]>(nv);
+        auto dd = create_up_array<FLOAT>(nv);
 
         #pragma omp parallel for
         for (int i = 0; i < nv; ++i){

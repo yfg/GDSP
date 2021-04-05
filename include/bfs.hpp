@@ -38,9 +38,9 @@ namespace Sppart{
 
     template<class XADJ_INT, class FT> // assuming FT is float or double
     void bfs_mt_for(const int nv, const XADJ_INT* const xadj, const int* const adjncy, const int source, FT* const dists, const int n_threads){
-        auto up_visit = std::make_unique<int[]>(nv); // Array for stack
-        auto up_visit_next = std::make_unique<int[]>(nv); // Array for stack
-        auto up_is_visited = std::make_unique<int[]>(nv);
+        auto up_visit = create_up_array<int>(nv); // Array for stack
+        auto up_visit_next = create_up_array<int>(nv); // Array for stack
+        auto up_is_visited = create_up_array<int>(nv);
         int* visit = up_visit.get();
         int* visit_next = up_visit_next.get();
         int* is_visited = up_is_visited.get();
@@ -95,9 +95,9 @@ namespace Sppart{
 
     template<class XADJ_INT, class FT>
     int bfs_mt_for_func(const int nv, const XADJ_INT* const xadj, const int* const adjncy, const int source, std::function<void(int, FT)> func, const int n_threads){
-        auto up_visit = std::make_unique<int[]>(nv); // Array for stack
-        auto up_visit_next = std::make_unique<int[]>(nv); // Array for stack
-        auto up_is_visited = std::make_unique<int[]>(nv);
+        auto up_visit = create_up_array<int>(nv); // Array for stack
+        auto up_visit_next = create_up_array<int>(nv); // Array for stack
+        auto up_is_visited = create_up_array<int>(nv);
         int* visit = up_visit.get();
         int* visit_next = up_visit_next.get();
         int* is_visited = up_is_visited.get();
@@ -162,9 +162,9 @@ namespace Sppart{
     template<class XADJ_INT, class FT> // assuming FT is float or double
     void bfs_mt_for_bitmap(const int nv, const XADJ_INT* const xadj, const int* const adjncy, const int source, FT* const dists){
         constexpr int NB = 8*sizeof(int); // Number of bits
-        auto up_visit = std::make_unique<int[]>(nv); // Array for stack
-        auto up_visit_next = std::make_unique<int[]>(nv); // Array for stack
-        auto up_is_visited = std::make_unique<int[]>(nv/NB+1);
+        auto up_visit = create_up_array<int>(nv); // Array for stack
+        auto up_visit_next = create_up_array<int>(nv); // Array for stack
+        auto up_is_visited = create_up_array<int>(nv/NB+1);
         int* visit = up_visit.get();
         int* visit_next = up_visit_next.get();
         int* is_visited = up_is_visited.get();
@@ -222,9 +222,9 @@ namespace Sppart{
 
     template<class XADJ_INT, class FT> // assuming FT is float or double
     void bfs_mt_for_redundant(const int nv, const XADJ_INT* const xadj, const int* const adjncy, const int source, FT* const dists){
-        auto up_visit = std::make_unique<int[]>(nv); // Array for stack
-        auto up_visit_next = std::make_unique<int[]>(nv); // Array for stack
-        auto up_is_visited = std::make_unique<int[]>(nv);
+        auto up_visit = create_up_array<int>(nv); // Array for stack
+        auto up_visit_next = create_up_array<int>(nv); // Array for stack
+        auto up_is_visited = create_up_array<int>(nv);
         int* visit = up_visit.get();
         int* visit_next = up_visit_next.get();
         int* is_visited = up_is_visited.get();
@@ -277,9 +277,9 @@ namespace Sppart{
 
     template<class XADJ_INT, class FT> // assuming FT is float or double
     void bfs_mt_stack(const int nv, const XADJ_INT* const xadj, const int* const adjncy, const int source, FT* const dists){
-        auto visit = std::make_unique<int[]>(nv); // Array for stack
-        auto visit_next = std::make_unique<int[]>(nv); // Array for stack
-        auto is_visited = std::make_unique<int[]>(nv);
+        auto visit = create_up_array<int>(nv); // Array for stack
+        auto visit_next = create_up_array<int>(nv); // Array for stack
+        auto is_visited = create_up_array<int>(nv);
         int visit_head = 0;
         int visit_next_head = 0;
 
@@ -342,11 +342,11 @@ namespace Sppart{
     template<class XADJ_INT, class FT> // assuming FT is float or double
     void msbfs_bitmap(const int nv, const XADJ_INT* const xadj, const int* const adjncy, const int n_source, const int* const sources, FT* const dists){
         constexpr int NB = 8*sizeof(int); // Number of bits
-        auto visit = std::make_unique<int[]>(nv); // Array for stack
-        auto visit_next = std::make_unique<int[]>(nv); // Array for stack
-        auto seen_flag = std::make_unique<int[]>(nv); // Treated as bit field
-        auto visit_flag = std::make_unique<int[]>(nv); // Treated as bit field
-        auto visit_next_flag = std::make_unique<int[]>(nv); // Treated as bit field
+        auto visit = create_up_array<int>(nv); // Array for stack
+        auto visit_next = create_up_array<int>(nv); // Array for stack
+        auto seen_flag = create_up_array<int>(nv); // Treated as bit field
+        auto visit_flag = create_up_array<int>(nv); // Treated as bit field
+        auto visit_next_flag = create_up_array<int>(nv); // Treated as bit field
         int visit_head = 0;
         int visit_next_head = 0;
 

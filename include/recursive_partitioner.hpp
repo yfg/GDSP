@@ -41,7 +41,7 @@ namespace Sppart {
             int64_t cut = info.cut;
 
             if ( n_parts > 2 ){
-                auto label = std::make_unique<int[]>(g.nv);
+                auto label = create_up_array<int>(g.nv);
                 #pragma omp parallel for
                 for (int i = 0; i < g.nv; ++i){
                     label[i] = i;
@@ -147,7 +147,7 @@ namespace Sppart {
         // SplitGraphPart of metis-5.1.0/libmetis/pmetis.c
         static std::array<Graph<XADJ_INT>, 2> split_graph(const Graph<XADJ_INT> &g, const int* const label, const int* const bipartition, const BoundaryList &blist, std::array<std::unique_ptr<int[]>, 2> &slabel_out){
             int snvtxs[2], snedges[2];
-            auto rename = std::make_unique<int[]>(g.nv);
+            auto rename = create_up_array<int>(g.nv);
 
             snvtxs[0] = snvtxs[1] = snedges[0] = snedges[1] = 0;
             for (int i = 0; i < g.nv; ++i) {
@@ -156,10 +156,10 @@ namespace Sppart {
                 snedges[p] += g.xadj[i+1] - g.xadj[i];
             }
 
-            std::array<std::unique_ptr<XADJ_INT[]>, 2> sxadj = { std::make_unique<XADJ_INT[]>(snvtxs[0]+1), std::make_unique<XADJ_INT[]>(snvtxs[1]+1) };
-            std::array<std::unique_ptr<int[]>, 2> sadjncy = { std::make_unique<int[]>(snedges[0]), std::make_unique<int[]>(snedges[1]) };
-            slabel_out[0] = std::make_unique<int[]>(snvtxs[0]);
-            slabel_out[1] = std::make_unique<int[]>(snvtxs[1]);
+            std::array<std::unique_ptr<XADJ_INT[]>, 2> sxadj = { create_up_array<XADJ_INT>(snvtxs[0]+1), create_up_array<XADJ_INT>(snvtxs[1]+1) };
+            std::array<std::unique_ptr<int[]>, 2> sadjncy = { create_up_array<int>(snedges[0]), create_up_array<int>(snedges[1]) };
+            slabel_out[0] = create_up_array<int>(snvtxs[0]);
+            slabel_out[1] = create_up_array<int>(snvtxs[1]);
 
             #pragma omp parallel
             for (int p = 0; p < 2; ++p){

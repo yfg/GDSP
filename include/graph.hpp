@@ -5,6 +5,7 @@
  
 #include<cstdint>
 #include<memory>
+#include<util.hpp>
 
 namespace Sppart {
     // Class for unweighted undirected graph
@@ -40,7 +41,7 @@ namespace Sppart {
         }
 
         Graph<XADJ_INT> create_subgraph(std::function<bool(int)> is_subgraph_vertex) const {
-            auto sub_index = std::make_unique<int[]>(nv);
+            auto sub_index = create_up_array<int>(nv);
 
             int vertex_cnt = 0;
             XADJ_INT nnz_cnt = 0;            
@@ -58,8 +59,8 @@ namespace Sppart {
             }
 
             const int sub_nv = vertex_cnt;
-            auto sub_xadj = std::make_unique<int[]>(sub_nv+1);
-            auto sub_adjncy = std::make_unique<XADJ_INT[]>(nnz_cnt);            
+            auto sub_xadj = create_up_array<int>(sub_nv+1);
+            auto sub_adjncy = create_up_array<XADJ_INT>(nnz_cnt);            
 
             vertex_cnt = 0;
             nnz_cnt = 0;

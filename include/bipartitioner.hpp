@@ -16,7 +16,7 @@
 #include<priority_queue.hpp>
 #include<bfs.hpp>
 #include<linear_algebra.hpp>
-#include<timer.hpp>
+#include<util.hpp>
 #include<connected_component.hpp>
 #include<params.hpp>
 #include<sssp.hpp>
@@ -89,8 +89,9 @@ namespace Sppart {
             const int n_dims = params.n_dims;
             const size_t nv = g.nv; // prevent possible overflow when allocating unique_ptrs.
 
-            auto X = std::make_unique<FLOAT[]>(nv*n_dims);
-            auto Y = std::make_unique<FLOAT[]>(nv*n_dims);
+            // auto X = std::make_unique<FLOAT[]>(nv*n_dims);
+            auto X = create_up_array<FLOAT>(nv*n_dims);
+            auto Y = create_up_array<FLOAT>(nv*n_dims);
 
             compute_ssspd_basis(g, X.get(), params, rand_engine, info);
 
@@ -108,8 +109,8 @@ namespace Sppart {
             const int n_dims = params.n_dims;
             const size_t nv = g.nv; // prevent possible overflow when allocating unique_ptrs.
 
-            auto X = std::make_unique<FLOAT[]>(nv*n_dims);
-            auto Y = std::make_unique<FLOAT[]>(nv*n_dims);
+            auto X = create_up_array<FLOAT>(nv*n_dims);
+            auto Y = create_up_array<FLOAT>(nv*n_dims);
             compute_ssspd_basis(g, X.get(), params, rand_engine, info);
             compute_fiedler_rayleigh_ritz(params.n_dims, g, X.get(), Y.get(), info);
             SpectralBipartitioner<XADJ_INT,FLOAT> spb = fiedler_partition(Y.get(), g, params, in_target_weights_ratio, rand_engine, info);
@@ -130,11 +131,12 @@ namespace Sppart {
             int smaller_count = 0;
             int larger_count = spb.part_weights[larger_part];
             
-            auto sub_g = std::make_unique<Graph<XADJ_INT>>(g.create_subgraph([&](int i)->bool{return spb.bipartition[i]==smaller_part;}));
+            // auto sub_g = std::make_unique<Graph<XADJ_INT>>(g.create_subgraph([&](int i)->bool{return spb.bipartition[i]==smaller_part;}));
+            std::unique_ptr<Graph<XADJ_INT>> sub_g(g.create_subgraph([&](int i)->bool{return spb.bipartition[i]==smaller_part;}));
             for (int i = 0; i < g.nv; ++i){
                 spb.bipartition[i] = spb.bipartition[i] == larger_part ? larger_part : -1;
             }
-            auto org_idx = std::make_unique<int[]>(sub_g->nv);
+            auto org_idx = create_up_array<int>(sub_g->nv);
             int cnt = 0;
             for (int i = 0; i < nv; ++i){
                 if ( spb.bipartition[i] == -1 ){
@@ -145,8 +147,8 @@ namespace Sppart {
             // printf("nv small large sum %d %d %d %d %d %d\n", g.nv, smaller_part, smaller_count, larger_part, larger_count, smaller_count + larger_count);
             while( 1 ){
                 const size_t sub_nv = sub_g->nv;
-                auto X = std::make_unique<FLOAT[]>(sub_nv*n_dims);
-                auto Y = std::make_unique<FLOAT[]>(sub_nv*n_dims);
+                auto X = create_up_array<FLOAT>(sub_nv*n_dims);
+                auto Y = create_up_array<FLOAT>(sub_nv*n_dims);
 
                 // printf("connected ? %d\n", check_connected(sub_g->nv, sub_g->xadj, sub_g->adjncy));
                 compute_ssspd_basis(*sub_g, X.get(), params, rand_engine, info);
@@ -189,8 +191,9 @@ namespace Sppart {
                     }                                        
                     break;
                 }
-                sub_g = std::make_unique<Graph<XADJ_INT>>(sub_g->create_subgraph([&](int i)->bool{return sub_spb.bipartition[i]==sub_larger_part;}));
-                auto new_org_idx = std::make_unique<int[]>(sub_g->nv);
+                // sub_g = std::make_unique<Graph<XADJ_INT>>(sub_g->create_subgraph([&](int i)->bool{return sub_spb.bipartition[i]==sub_larger_part;}));
+                sub_g = std::unique_ptr<Graph<XADJ_INT>>(sub_g->create_subgraph([&](int i)->bool{return sub_spb.bipartition[i]==sub_larger_part;}));
+                auto new_org_idx = create_up_array<int>(sub_g->nv);
                 int cnt = 0;
                 for (int i = 0; i < sub_nv; ++i){
                     if ( sub_spb.bipartition[i] == sub_larger_part ){
@@ -487,7 +490,7 @@ namespace Sppart {
                 }
             }
 
-            auto locked = std::make_unique<bool[]>(g.nv);
+            auto locked = create_up_array<bool>(g.nv);
             #pragma omp parallel for
             for (int i = 0; i < g.nv; ++i){
                 locked[i] = false;
@@ -564,8 +567,8 @@ namespace Sppart {
             // Key is vertex_id and Value is gain value
             std::array<PriorityQueue, 2> gain_queues = {PriorityQueue(g.nv), PriorityQueue(g.nv)};
 
-            auto locked = std::make_unique<bool[]>(g.nv);
-            auto vertex_id_history = std::make_unique<int[]>(g.nv);
+            auto locked = create_up_array<bool>(g.nv);
+            auto vertex_id_history = create_up_array<int>(g.nv);
             #pragma omp parallel for
             for (int i = 0; i < g.nv; ++i){
                 locked[i] = false;

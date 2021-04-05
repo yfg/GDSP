@@ -11,7 +11,7 @@
 
 #include <matrix_read.hpp>
 #include <connected_component.hpp>
-#include <timer.hpp>
+#include <util.hpp>
 
 
 JULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.

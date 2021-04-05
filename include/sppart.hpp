@@ -1,7 +1,7 @@
 // Copyright (c) 2020 Yasunori Futamura All Rights Reserved.
 
 #pragma once
-#include<timer.hpp>
+#include<util.hpp>
 #include<blas_lapack.hpp>
 #include<graph.hpp>
 #include<params.hpp>
