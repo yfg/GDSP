@@ -409,9 +409,9 @@ namespace Sppart {
         }
 
         void setup_partitioning_data(){
-            cut = 0;
+            int64_t cut_tmp = 0; // Use a temp variable because Intel compiler cannot correctly handle "omp parallel for reduction" with a class member variable (this->cut)
 
-            #pragma omp parallel for reduction (+:cut)
+            #pragma omp parallel for reduction (+:cut_tmp)
             for (int i = 0; i < g.nv; ++i){
                 internal_degrees[i] = 0;
                 external_degrees[i] = 0;
@@ -422,7 +422,7 @@ namespace Sppart {
                         external_degrees[i] += 1;
                     }
                 }
-                cut += external_degrees[i];
+                cut_tmp += external_degrees[i];
             }
 
             part_weights[0] = 0;
@@ -431,9 +431,10 @@ namespace Sppart {
                 part_weights[bipartition[i]] += 1;
             }
 
-            assert(cut % 2 == 0);
-            cut /= 2;
+            assert(cut_tmp % 2 == 0);
+            cut_tmp /= 2;
             assert(part_weights[0] + part_weights[1] == g.nv);
+            this->cut = cut_tmp;
         }
 
         double get_maxbal(){
