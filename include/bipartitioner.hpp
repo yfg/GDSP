@@ -716,6 +716,180 @@ namespace Sppart {
             return pass_count;
         }
 
+        int fm_refinement_allow_worse_balance(const int max_pass, const double ubfactor){
+            // const int max_pass = params.fm_max_pass;
+            const bool no_limit = params.fm_no_limit;
+            int limit;
+            if ( params.fm_limit >= 0 ){
+                limit = params.fm_limit;
+            }else{
+                limit = std::min(std::max(static_cast<int>(0.01*g.nv), 15), 100); // from Metis
+            }
+
+            std::array<int, 2> target_weights;
+            target_weights[0] = g.nv*target_weights_ratio[0];
+            target_weights[1] = g.nv - target_weights[0];
+
+            int average_weight = std::min(g.nv/20, 2); // from Metis
+            int org_diff = std::abs(target_weights[0] - part_weights[0]);// from Metis
+
+            // Create vertex gain priority queue
+            // Key is vertex_id and Value is gain value
+            PriorityQueue gain_queue(g.nv);
+
+            auto locked = create_up_array<bool>(g.nv);
+            auto vertex_id_history = create_up_array<int>(g.nv);
+            #pragma omp parallel for
+            for (int i = 0; i < g.nv; ++i){
+                locked[i] = false;
+            }
+    
+            int pass_count = 0;
+            for (int i_pass = 0; i_pass < max_pass; ++i_pass){
+                pass_count++;
+
+                gain_queue.reset();
+
+                std::vector<int> perm(blist.get_length());
+                std::iota(perm.begin(), perm.end(), 0); // perm = [0, 1, ...]
+                std::shuffle(perm.begin(), perm.end(), rand_engine);
+                for (int i = 0; i < blist.get_length(); ++i){
+                    const int j = blist.get_boundary_at(perm[i]);
+                    const int gain = external_degrees[j] - internal_degrees[j];
+                    gain_queue.insert(j, gain);
+                }
+    
+                const int init_cut = cut;
+                int minimum_cut = cut;
+                int minimum_diff = std::abs(target_weights[0] - part_weights[0]);
+                int i_mincut = -1;
+                int try_count = 0;
+
+                for (int i = 0; i < g.nv; ++i){
+                    int vertex_id;
+                    int from_part;
+                    int to_part;
+                    while ( !gain_queue.empty() ) {
+                        vertex_id = gain_queue.get_top();
+                        from_part = bipartition[vertex_id];
+                        to_part = other(from_part);
+                        if ( std::max(part_weights[from_part]-1, part_weights[to_part]+1) < g.nv*0.5*ubfactor ){
+                            break;
+                        }
+                    }
+                    if ( gain_queue.empty() ) {
+                        break;
+                    }                    
+                    try_count++;
+
+                    const int gain = external_degrees[vertex_id] - internal_degrees[vertex_id];
+                    // printf("gain %d\n", gain);
+                    cut -= gain;
+            
+                    part_weights[from_part] -= 1;
+                    part_weights[to_part] += 1;
+                    const int new_diff = std::abs(target_weights[0] - part_weights[0]);
+
+                    // if ( (cut < minimum_cut && new_diff <= org_diff + average_weight)
+                    //     || (cut == minimum_cut && new_diff < minimum_diff ) ){ // from Metis
+                    if ( cut < minimum_cut ){
+                        minimum_cut = cut;
+                        minimum_diff = new_diff;
+                        i_mincut = i;
+                    }else if ( !no_limit && i - i_mincut > limit ){
+                        cut += gain;
+                        part_weights[from_part] += 1;
+                        part_weights[to_part] -= 1;
+                        try_count--;
+                        break;
+                    }
+
+                    bipartition[vertex_id] = to_part;
+                    locked[vertex_id] = true;
+                    vertex_id_history[i] = vertex_id;
+
+                    // Swap ed id
+                    std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+
+                    if ( external_degrees[vertex_id] == 0 && g.xadj[vertex_id] < g.xadj[vertex_id+1] ){
+                        blist.remove(vertex_id);
+                    }
+                
+                    for ( XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
+                        const int j = g.adjncy[k];
+                        const int w = to_part == bipartition[j] ? 1 : -1;
+                        internal_degrees[j] += w;
+                        external_degrees[j] -= w;
+
+                        if ( blist.is_boundary(j) ){
+                            if ( external_degrees[j] == 0 ){
+                                blist.remove(j);
+                                if ( !locked[j] ){
+                                    gain_queue.remove(j); // just remove j from queue
+                                }
+                            }else{
+                                if ( !locked[j] ){
+                                    const int gain = external_degrees[j] - internal_degrees[j];
+                                    gain_queue.update(j, gain);
+                                }
+                            }                    
+                        }else{
+                            if ( external_degrees[j] > 0 ){
+                                blist.insert(j);
+                                if (!locked[j]){
+                                    const int gain = external_degrees[j] - internal_degrees[j];
+                                    gain_queue.insert(j, gain);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Clear locked array
+                #pragma omp parallel for
+                for (int i = 0; i < try_count; ++i){
+                    locked[vertex_id_history[i]] = false;
+                }
+
+                for (try_count--; try_count > i_mincut; --try_count){
+                    const int vertex_id = vertex_id_history[try_count];
+                    const int from_part = bipartition[vertex_id];
+                    const int to_part = other(from_part);
+                    bipartition[vertex_id] = to_part;
+
+                    // Swap ed id
+                    std::swap(external_degrees[vertex_id], internal_degrees[vertex_id]);
+
+                    if ( external_degrees[vertex_id] == 0 && blist.is_boundary(vertex_id) && g.xadj[vertex_id] < g.xadj[vertex_id+1] ){
+                        blist.remove(vertex_id);
+                    }else if (external_degrees[vertex_id] > 0 && !blist.is_boundary(vertex_id)){
+                        blist.insert(vertex_id);
+                    }
+                    part_weights[from_part] -= 1;
+                    part_weights[to_part] += 1;
+
+                    for (XADJ_INT k = g.xadj[vertex_id]; k < g.xadj[vertex_id+1]; ++k){
+                        const int j = g.adjncy[k];
+                        const int w = (to_part == bipartition[j]) ? 1 : -1;
+                        internal_degrees[j] += w;
+                        external_degrees[j] -= w;           
+                        if ( blist.is_boundary(j) && external_degrees[j] == 0){
+                            blist.remove(j);
+                        }
+                        if (!blist.is_boundary(j) && external_degrees[j] > 0){
+                            blist.insert(j);
+                        }
+                    }
+                }
+                cut = minimum_cut;
+
+                if ( i_mincut <= 0 || cut == init_cut ){
+                    break; // break from i_pass loop
+                }
+            }
+            return pass_count;
+        }
+
         SpectralBipartitioner(const SpectralBipartitioner&) = delete;
         SpectralBipartitioner& operator=(const SpectralBipartitioner&) = delete;
 
