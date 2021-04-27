@@ -20,6 +20,10 @@
 #include<connected_component.hpp>
 #include<params.hpp>
 #include<sssp.hpp>
+#include<maxflow/src/lib/common_types.h>
+#include<maxflow/src/lib/algorithms/sequential/push_relabel_highest.h>
+// #include<maxflow/src/lib/algorithms/sequential/edmonds_karp.h>
+#include<unordered_map>
 
 namespace Sppart {
     // Partitioner class
@@ -250,10 +254,12 @@ namespace Sppart {
                 return fiedler_sign_rounding_partition(fv, g, params, in_target_weights_ratio, rand_engine, info);
             } else if ( params.round_alg == 2 ){
                 return fiedler_min_conductance_rounding_partition(fv, g, params, in_target_weights_ratio, rand_engine, info);
+            } else if ( params.round_alg == 3 ){
+                return fiedler_midflow_partition(fv, g, params, in_target_weights_ratio, rand_engine, info);
             } else {
                 printf("Error: No such rounding method\n");
                 std::terminate();
-            }                
+            }
         }
 
         static SpectralBipartitioner<XADJ_INT,FLOAT> fiedler_sign_rounding_partition(const FLOAT* const fv, const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
@@ -396,6 +402,142 @@ namespace Sppart {
                 }
             }
 
+            return spb;
+        }
+
+        template<class T>
+        using my_vector = std::vector<T>;
+
+        static SpectralBipartitioner<XADJ_INT,FLOAT> fiedler_midflow_partition(const FLOAT* const fv, const Graph<XADJ_INT>& g, const InputParams& params, const double* const in_target_weights_ratio, std::mt19937& rand_engine, OutputInfo& info){
+            SpectralBipartitioner<XADJ_INT,FLOAT> spb(g, params, in_target_weights_ratio, rand_engine, info);
+
+            std::vector<int> perm(g.nv);
+            #pragma omp parallel for
+            for (int i = 0; i < g.nv; ++i){
+                perm[i] = i;            
+            }
+
+            Timer tt;
+            tt.start();
+            std::sort(perm.begin(), perm.end(), [&fv](size_t i1, size_t i2) {
+                return fv[i1] < fv[i2];
+            });
+            tt.stop();
+            printf("time maxflow sort: %f\n", tt.get_time());
+            tt.clear();
+
+            const double beta = 1.0 - params.ubfactor/2.0;
+            const int nF = g.nv*beta;
+            const int nL = nF;
+            const int nU = g.nv - nF - nL;
+
+            const int meta_source = g.nv;
+            const int meta_target = g.nv+1;
+
+            tt.start();
+            // std::vector<std::vector<basic_edge<int,int>>> maxflow_graph(g.nv+2);
+            std::vector<std::vector<cached_edge<int,int>>> maxflow_graph(g.nv+2);
+
+            for (int i = 0; i < g.nv; ++i){
+                maxflow_graph[i].reserve(g.xadj[i+1] - g.xadj[i]+1); // +1 for arcs to meta-source or meta-target
+            }
+            maxflow_graph[meta_source].reserve(nF);
+            maxflow_graph[meta_target].reserve(nL);
+
+            std::vector<std::unordered_map<int,int>> map_array(g.nv+2);
+            const int unit_capacity = 1;
+            // const int infinite_capacity = 100000000;
+
+            // Form digraph for the maxflow algorithm
+            int total_meta_source_cap = 0;
+            for (int i = 0; i < g.nv; ++i){
+                const int i2 = perm[i];
+                const int undefined = -1;
+                for (XADJ_INT k = g.xadj[i2]; k < g.xadj[i2+1]; ++k){
+                    const int j = g.adjncy[k];
+                    map_array[i2][j] = maxflow_graph[i2].size();
+                    maxflow_graph[i2].emplace_back(j, unit_capacity, undefined);
+                }
+                if ( i < nF) { // connect with meta source vertex
+                    map_array[meta_source][i2] = maxflow_graph[meta_source].size();
+                    const int cap = g.xadj[i2+1] - g.xadj[i2];
+                    total_meta_source_cap += cap;
+                    // maxflow_graph[meta_source].emplace_back(i2, infinite_capacity, undefined);
+                    maxflow_graph[meta_source].emplace_back(i2, cap, undefined);
+                    map_array[i2][meta_source] = maxflow_graph[i2].size();
+                    maxflow_graph[i2].emplace_back(meta_source, 0, undefined);                    
+                }else if ( i >= nF + nU ){ // connect with meta target vertex
+                    map_array[i2][meta_target] = maxflow_graph[i2].size();
+                    // maxflow_graph[i2].emplace_back(meta_target, infinite_capacity, undefined);
+                    maxflow_graph[i2].emplace_back(meta_target, total_meta_source_cap, undefined);
+                    map_array[meta_target][i2] = maxflow_graph[meta_target].size();
+                    maxflow_graph[meta_target].emplace_back(i2, 0, undefined);                    
+                }
+            }
+
+            // Set reverse_edge_index
+            for (int i = 0; i < g.nv+2; ++i){
+                for ( auto & edge : maxflow_graph[i] ){
+                    edge.reverse_edge_index = map_array[edge.dst_vertex][i];
+                    // edge.reverse_edge_index = map_array[edge.dst_vertex].at(i); // can be used for debug
+                }
+            }
+            // set reverse_edge_capacity for push-relabel related algorithms cf. include/maxflow/src/graph_loader.h
+            for ( auto & vec : maxflow_graph ){
+                for ( auto & edge : vec ){
+                    edge.reverse_r_capacity = maxflow_graph[edge.dst_vertex][edge.reverse_edge_index].r_capacity;
+                }
+            }
+            tt.stop();
+            printf("time maxflow build graph: %f\n", tt.get_time());
+            tt.clear();
+
+            tt.start();
+            push_relabel_highest::max_flow_instance<my_vector, int, int> mfi(maxflow_graph, meta_source, meta_target);
+            // edmonds_karp::max_flow_instance<my_vector, int, int> mfi(maxflow_graph, meta_source, meta_target);
+            int flow = mfi.find_max_flow();
+            printf("flow = %d\n", flow);
+            tt.stop();
+            printf("time maxflow run: %f\n", tt.get_time());
+            tt.clear();
+
+            maxflow_graph = mfi.steal_network();
+            auto heights = create_up_array<int>(g.nv+2);
+            for (int i = 0; i < g.nv+2; ++i) heights[i] = mfi.get_label(i);
+            
+            for (int i = 0; i < g.nv; ++i) spb.bipartition[i] = 1;
+            
+            auto visited = create_up_array<bool>(g.nv+2);
+            for (int i = 0; i < g.nv+2; ++i) visited[i] = false;
+            std::queue<int> que;
+            que.push(meta_source);
+            visited[meta_source] = true;
+
+            tt.start();
+            while ( !que.empty() ){
+                const int v = que.front();
+                que.pop();
+                if (v < g.nv) spb.bipartition[v] = 0;
+                for (int k = 0; k < maxflow_graph[v].size(); ++k){                    
+                    auto & edge = maxflow_graph[v][k];
+                    // height info should be used for push-relabel related algorithms to find s-t min-cut
+                    // https://stackoverflow.com/questions/36216258/implement-push-relabel-algorithm-s-t-min-cut-edges-for-undirected-unweighted-gra
+                    if ( !visited[edge.dst_vertex] && heights[edge.dst_vertex] >= heights[v] - 1 ){
+                    // if ( !visited[edge.dst_vertex] && edge.r_capacity > 0 ){ // works for maxflow algorithms other than push-relabel-type algorithms
+                        que.push(edge.dst_vertex);
+                        visited[edge.dst_vertex] = true;
+                    }
+                }
+            }
+            tt.stop();
+            printf("time maxflow bfs: %f\n", tt.get_time());
+            tt.clear();
+
+            tt.start();
+            spb.setup_partitioning_data();
+            tt.stop();
+            printf("time maxflow setup pd: %f\n", tt.get_time());
+            tt.clear();
             return spb;
         }
 
