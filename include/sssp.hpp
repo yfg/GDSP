@@ -66,14 +66,14 @@ namespace Sppart {
             else if ( params.bfs_alg == 4 ) {
                 for (int i = 0; i < n_dims; ++i){
                     const int s = sources[i];
-                    bfs_mt_stack(g.nv, g.xadj, g.adjncy, s, &dists[i*nv]);
+                    bfs_for(g.nv, g.xadj, g.adjncy, s, &dists[i*nv]);
                 }
             } else if ( params.bfs_alg == 5 ) {
                 msbfs_bitmap(g.nv, g.xadj, g.adjncy, n_dims, sources.data(), dists);
             }else if ( params.bfs_alg == 6 ) {
                 for (int i = 0; i < n_dims; ++i){
                     const int s = sources[i];
-                    bfs_mt_for_bitmap(g.nv, g.xadj, g.adjncy, s, &dists[i*nv]);
+                    bfs_for_bitmap(g.nv, g.xadj, g.adjncy, s, &dists[i*nv]);
                 }
             }else if ( params.bfs_alg == 7 ) {
                 for (int i = 0; i < n_dims; ++i){

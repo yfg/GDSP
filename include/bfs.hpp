@@ -37,6 +37,86 @@ namespace Sppart{
     }
 
     template<class XADJ_INT, class FT> // assuming FT is float or double
+    void bfs_for(const int nv, const XADJ_INT* const xadj, const int* const adjcny, const int source, FT* const dists){
+        auto up_visit = create_up_array<int>(nv); // Array for stack
+        auto up_visit_next = create_up_array<int>(nv); // Array for stack
+        auto up_is_visited = create_up_array<int>(nv);
+        int* visit = up_visit.get();
+        int* visit_next = up_visit_next.get();
+        int* is_visited = up_is_visited.get();
+        int visit_head = 0;
+        int visit_next_head = 0;
+
+        for (int i = 0; i < nv; ++i){
+            is_visited[i] = 0;
+        }
+
+        dists[source] = 0.0;
+        visit[visit_head] = source;
+        visit_head++;
+        is_visited[source] = 1;
+        double level = 1.0;
+        do{
+            for ( int pos = 0; pos < visit_head; ++pos) {
+                const int i = visit[pos];
+                for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
+                    const int j = adjcny[k];
+                    if ( is_visited[j] ) continue;
+                    visit_next[visit_next_head++] = j; // this will not be used when is_visited[j]==0
+                    dists[j] = level;
+                    is_visited[j] = 1;
+                }
+            }
+            visit_head = visit_next_head;
+            visit_next_head = 0;
+            std::swap(visit, visit_next);
+            level += 1.0;
+        } while (visit_head != 0);
+    }
+
+    template<class XADJ_INT, class FT> // assuming FT is float or double
+    void bfs_for_bitmap(const int nv, const XADJ_INT* const xadj, const int* const adjcny, const int source, FT* const dists){
+        constexpr int NB = 8*sizeof(int); // Number of bits
+        auto up_visit = create_up_array<int>(nv); // Array for stack
+        auto up_visit_next = create_up_array<int>(nv); // Array for stack
+        auto up_is_visited = create_up_array<int>(nv/NB+1);
+        int* visit = up_visit.get();
+        int* visit_next = up_visit_next.get();
+        int* is_visited = up_is_visited.get();
+        int visit_head = 0;
+        int visit_next_head = 0;
+
+        for (int i = 0; i < nv/NB+1; ++i){
+            is_visited[i] = 0;
+        }
+
+        dists[source] = 0.0;
+        visit[visit_head] = source;
+        visit_head++;
+        is_visited[source/NB] = 1 << (source%NB);
+
+        double level = 1.0;
+        do{
+            for ( int pos = 0; pos < visit_head; ++pos) {
+                const int i = visit[pos];
+                for (XADJ_INT k = xadj[i]; k < xadj[i+1]; ++k){
+                    const int j = adjcny[k];
+                    const int p = j/NB;
+                    const int flag = 1 << j%NB;
+                    if ( is_visited[p] & flag ) continue;
+                    visit_next[visit_next_head++] = j; // this will not be used when is_visited[j]==0
+                    dists[j] = level;
+                    is_visited[p] |= flag;
+                }
+            }
+            visit_head = visit_next_head;
+            visit_next_head = 0;
+            std::swap(visit, visit_next);
+            level += 1.0;
+        } while (visit_head != 0);
+    }
+
+    template<class XADJ_INT, class FT> // assuming FT is float or double
     void bfs_mt_for(const int nv, const XADJ_INT* const xadj, const int* const adjncy, const int source, FT* const dists, const int n_threads){
         auto up_visit = create_up_array<int>(nv); // Array for stack
         auto up_visit_next = create_up_array<int>(nv); // Array for stack
