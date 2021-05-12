@@ -3,6 +3,7 @@
 #pragma once
 #include<chrono>
 #include<functional>
+#include <sstream>
 
 namespace Sppart {
 
@@ -52,5 +53,23 @@ namespace Sppart {
         f();
         auto end = std::chrono::system_clock::now();;
         return std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count()/1000.0;
+    }
+
+    // get filename without extension from file path
+    std::string get_filename_wo_ext(std::string& file_path){
+        std::stringstream ss(file_path);
+        std::string str;
+        std::vector<std::string> vec;
+        vec[vec.size()-1];
+        while ( getline(ss, str, '/') ){
+            vec.push_back(str);
+        }
+        str = vec[vec.size()-1];
+        vec.clear();
+        std::stringstream ss2(str);
+        while ( getline(ss2, str, '.') ){
+            vec.push_back(str);
+        }
+        return vec[0];
     }
 }

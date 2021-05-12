@@ -11,6 +11,8 @@
 #include <omp.h>
 
 #include <matrix_read.hpp>
+#include <json.hpp>
+#include <fstream>
 #include <sppart.hpp>
 
 JULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.
@@ -24,6 +26,7 @@ int main(int argc, char* argv[]){
     bool use_double = false;
     Sppart::InputParams params;
     int nparts = 2;
+    std::string json_file_path = "";
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
@@ -51,6 +54,7 @@ int main(int argc, char* argv[]){
         ->default_val(false);
     app.add_option("--roundalg", params.round_alg, "Rounding method for initialize partitioning with Fiedler vector")
         ->default_val(0);
+    app.add_option("--json", json_file_path, "File path for output JSON file");
 
     try {
         app.parse(argc, argv);
@@ -89,9 +93,15 @@ int main(int argc, char* argv[]){
     int cut2 = Sppart::compute_cut(g.nv, g.xadj, g.adjncy, output_partition.get());
     printf("cut2 %d\n",cut2);
 
+    if ( info.cut != cut2 ) {
+        printf("Something wrong with Sppart !!!\n");
+        std::terminate();
+    }
+
+    const int nthreads = omp_get_max_threads();
 
     printf("------ Execution info ------------\n");
-    printf("Num threads = %d\n", omp_get_max_threads());
+    printf("Num threads = %d\n", nthreads);
     printf("Num parts = %d\n", nparts);
 
     printf("------ Graph info ----------------\n");
@@ -124,13 +134,49 @@ int main(int argc, char* argv[]){
     printf("        %-12s %10.3lf\n", "sumzero", info.time_spectral_sumzero);
     printf("        %-12s %10.3lf\n", "orth", info.time_spectral_orth);
     printf("        %-12s %10.3lf\n", "XtY", info.time_spectral_XtY);
-    printf("        %-12s %10.3lf\n", "eig",info.time_spectral_eig);
+    printf("        %-12s %10.3lf\n", "eig", info.time_spectral_eig);
     printf("        %-12s %10.3lf\n", "back", info.time_spectral_back);
     printf("        %-12s %10.3lf\n", "round", info.time_spectral_round);
     printf("    %-12s %10.3lf\n", "balance", info.time_balance);
     printf("    %-12s %10.3lf\n", "fm", info.time_fm);
     printf("    %-12s %10.3lf\n", "split", info.time_split);
 
+    if ( !json_file_path.empty() ){
+        std::string mat_name = Sppart::get_filename_wo_ext(matrix_file_path);
+        nlohmann::json json;
+        json["method"] = "sppart";
+        json["mat"] = mat_name;
+        json["npart"] = nparts;
+        json["nthreads"] = nthreads;
+        json["param"]["ub"] = params.ubfactor;
+        json["param"]["seed"] = params.rand_seed;
+        json["param"]["dims"] = params.n_dims;
+        json["param"]["srcalg"] = params.src_alg;
+        json["param"]["bfsalg"] = params.bfs_alg;
+        json["param"]["maxpass"] = params.fm_max_pass;
+        json["param"]["limit"] = params.fm_limit;
+        json["param"]["nolimit"] = params.fm_no_limit;
+        json["param"]["use_double_precision"] = use_double;
+        json["param"]["roundalg"] = params.round_alg;
+        json["result"]["cut"] = info.cut;
+        json["result"]["maxbal"] = info.maxbal;
+        json["result"]["time"]["total"] = time_total;
+        json["result"]["time"]["connect"] = info.time_connect;
+        json["result"]["time"]["spectral"]["total"] = info.time_spectral;
+        json["result"]["time"]["spectral"]["bfs"] = info.time_spectral_bfs;
+        json["result"]["time"]["spectral"]["spmm"] = info.time_spectral_spmm;
+        json["result"]["time"]["spectral"]["sumzero"] = info.time_spectral_sumzero;
+        json["result"]["time"]["spectral"]["orth"] = info.time_spectral_orth;
+        json["result"]["time"]["spectral"]["XtY"] = info.time_spectral_XtY;
+        json["result"]["time"]["spectral"]["eig"] = info.time_spectral_eig;
+        json["result"]["time"]["spectral"]["back"] = info.time_spectral_back;
+        json["result"]["time"]["spectral"]["round"] = info.time_spectral_round;
+        json["result"]["time"]["balance"] = info.time_balance;
+        json["result"]["time"]["fm"] = info.time_fm;
+        json["result"]["time"]["split"] = info.time_split;
+        std::ofstream fs(json_file_path);
+        fs << json.dump(4) << std::endl;
+    }
     return 0;
 }
 

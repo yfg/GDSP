@@ -12,20 +12,25 @@
 #include <matrix_read.hpp>
 #include <connected_component.hpp>
 #include <util.hpp>
+#include <json.hpp>
+#include <fstream>
+#include <omp.h>
 
 
 JULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.
 
 int main(int argc, char* argv[]){
-    CLI::App app("test");
+    CLI::App app("mtmetis_test");
     
     std::string matrix_file_path = "";
     int nparts = 2;
+    std::string json_file_path = "";
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
     app.add_option("--npart", nparts, "Number of part for partitioning")
         ->default_val(2);
+    app.add_option("--json", json_file_path, "File path for output JSON file");
 
     try {
         app.parse(argc, argv);
@@ -80,12 +85,31 @@ int main(int argc, char* argv[]){
     // if (mtmetis_options) {
     //     dl_free(mtmetis_options);
     // }
+    if ( ret != 1 || objval != cut2 ) {
+        printf("Something wrong with MTMETIS !!!\n");
+        std::terminate();
+    }
 
+    const int nthreads = omp_get_max_threads();
+    printf("Num threads = %d\n", nthreads);
     printf("mtmetis cut %d %d\n", ret, objval);
     printf("mtmetis cut2 %d\n", cut2);
-    // printf("metis maxbal %lf\n", maxbal);
     printf("mtmetis maxbal %lf\n", maxbal);
     printf("mtmetis time %lf\n", mtmetis_time);
+
+    if ( !json_file_path.empty() ){
+        std::string mat_name = Sppart::get_filename_wo_ext(matrix_file_path);
+        nlohmann::json json;
+        json["method"] = "mtmetis";
+        json["mat"] = mat_name;
+        json["npart"] = nparts;
+        json["nthreads"] = nthreads;
+        json["result"]["cut"] = objval;
+        json["result"]["maxbal"] = maxbal;
+        json["result"]["time"]["total"] = mtmetis_time;
+        std::ofstream fs(json_file_path);
+        fs << json.dump(4) << std::endl;
+    }
 
     return 0;
 }

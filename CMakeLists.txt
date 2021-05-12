@@ -27,6 +27,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/external/
     ${PROJECT_SOURCE_DIR}/external/metis-5.1.0/include
     ${PROJECT_SOURCE_DIR}/external/mt-metis-0.7.2/include
+    ${PROJECT_SOURCE_DIR}/external/nlohmann
 )
 add_library(sppart_blas_lapack STATIC src/blas_lapack_interface.f90)
 target_link_libraries(sppart_test sppart_blas_lapack ${LAPACK_LIBRARIES})

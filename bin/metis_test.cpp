@@ -12,16 +12,19 @@
 #include <matrix_read.hpp>
 #include <connected_component.hpp>
 #include <util.hpp>
+#include <json.hpp>
+#include <fstream>
 
 JULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.
 
 int main(int argc, char* argv[]){
-    CLI::App app("test");
+    CLI::App app("metis_test");
     
     std::string matrix_file_path = "";
     int nparts = 2;
     real_t ubfactor = 1.001;
     int rand_seed = 0;
+    std::string json_file_path = "";
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
@@ -31,6 +34,7 @@ int main(int argc, char* argv[]){
         ->default_val(1.001);
     app.add_option("--seed", rand_seed, "Seed for random number generator")
         ->default_val(0);
+    app.add_option("--json", json_file_path, "File path for output JSON file");
 
     try {
         app.parse(argc, argv);
@@ -75,9 +79,29 @@ int main(int argc, char* argv[]){
 
 
     printf("metis cut %d %d\n", ret, objval);
-    printf("cut2 %d %d\n", cut2);
+    printf("cut2 %d\n", cut2);
     printf("metis maxbal %lf\n", maxbal);
     printf("metis time %lf\n", metis_time);
+
+    if ( ret != 1 || objval != cut2 ) {
+        printf("Something wrong with METIS !!!\n");
+        std::terminate();
+    }
+
+    if ( !json_file_path.empty() ){
+        std::string mat_name = Sppart::get_filename_wo_ext(matrix_file_path);
+        nlohmann::json json;
+        json["method"] = "metis";
+        json["mat"] = mat_name;
+        json["npart"] = nparts;
+        json["param"]["seed"] = rand_seed;
+        json["param"]["ub"] = ubfactor;
+        json["result"]["cut"] = objval;
+        json["result"]["maxbal"] = maxbal;
+        json["result"]["time"]["total"] = metis_time;
+        std::ofstream fs(json_file_path);
+        fs << json.dump(4) << std::endl;
+    }
 
     return 0;
 }
