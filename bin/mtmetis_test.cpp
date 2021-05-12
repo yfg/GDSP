@@ -15,7 +15,7 @@
 #include <json.hpp>
 #include <fstream>
 #include <omp.h>
-
+#include <version.hpp>
 
 JULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.
 
@@ -91,6 +91,7 @@ int main(int argc, char* argv[]){
     }
 
     const int nthreads = omp_get_max_threads();
+    printf("Git hash %s\n", GIT_COMMIT_HASH);
     printf("Num threads = %d\n", nthreads);
     printf("mtmetis cut %d %d\n", ret, objval);
     printf("mtmetis cut2 %d\n", cut2);
@@ -100,6 +101,7 @@ int main(int argc, char* argv[]){
     if ( !json_file_path.empty() ){
         std::string mat_name = Sppart::get_filename_wo_ext(matrix_file_path);
         nlohmann::json json;
+        json["git hash"] = GIT_COMMIT_HASH;;
         json["method"] = "mtmetis";
         json["mat"] = mat_name;
         json["npart"] = nparts;

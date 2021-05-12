@@ -8,6 +8,18 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Julia REQUIRED)
 find_program(JULIA_BIN_PATH NAMES julia)
 
+# Get the latest abbreviated commit hash of the working branch
+execute_process(
+  COMMAND git log -1 --format=%h
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_COMMIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+configure_file(
+  ${CMAKE_SOURCE_DIR}/bin/version.hpp.in
+  ${CMAKE_BINARY_DIR}/bin/version.hpp
+  @ONLY
+)
 # execute_process(COMMAND "julia" "-e 'print(joinpath(Sys.BINDIR, Base.DATAROOTDIR, \"julia\"))'" RESULT_VARIABLE JUL_RET OUTPUT_VARIABLE JULIA_SHARE)
 # get_filename_component(JULIA_BIN_DIR ${JULIA_BIN_PATH} DIRECTORY)
 # set(JULIA_INCLUDE_DIR "${JULIA_BIN_DIR}/../include/julia")
@@ -28,6 +40,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/external/metis-5.1.0/include
     ${PROJECT_SOURCE_DIR}/external/mt-metis-0.7.2/include
     ${PROJECT_SOURCE_DIR}/external/nlohmann
+    ${CMAKE_BINARY_DIR}/bin/
 )
 add_library(sppart_blas_lapack STATIC src/blas_lapack_interface.f90)
 target_link_libraries(sppart_test sppart_blas_lapack ${LAPACK_LIBRARIES})

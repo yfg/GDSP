@@ -14,6 +14,7 @@
 #include <util.hpp>
 #include <json.hpp>
 #include <fstream>
+#include <version.hpp>
 
 JULIA_DEFINE_FAST_TLS() // only define this once, in an executable (not in a shared library) if you want fast code.
 
@@ -78,6 +79,7 @@ int main(int argc, char* argv[]){
     double maxbal = Sppart::compute_maxbal(nparts, nv, xadj.data(), adjncy.data(), part.data());
 
 
+    printf("Git hash %s\n", GIT_COMMIT_HASH);
     printf("metis cut %d %d\n", ret, objval);
     printf("cut2 %d\n", cut2);
     printf("metis maxbal %lf\n", maxbal);
@@ -91,6 +93,7 @@ int main(int argc, char* argv[]){
     if ( !json_file_path.empty() ){
         std::string mat_name = Sppart::get_filename_wo_ext(matrix_file_path);
         nlohmann::json json;
+        json["git hash"] = GIT_COMMIT_HASH;;
         json["method"] = "metis";
         json["mat"] = mat_name;
         json["npart"] = nparts;
