@@ -120,9 +120,9 @@ namespace Sppart {
         for (int i = 0; i < n_dims; ++i){
             info.time_spectral_bfs += timeit([&]{
                 if ( params.bfs_alg == 0 ) {
-                    bfs_mt_for(g.nv, g.xadj, g.adjncy, source, &dists[i*nv], omp_get_max_threads());
-                } else if ( params.bfs_alg == 1 ) {
                     gapbs::DOBFS(g, source, &dists[i*nv]);
+                } else if ( params.bfs_alg == 1 ) {
+                    bfs_mt_for(g.nv, g.xadj, g.adjncy, source, &dists[i*nv], omp_get_max_threads());
                 } else {
                     printf("no such bfs_alg\n");
                     std::terminate();                    
