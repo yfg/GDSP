@@ -43,9 +43,9 @@ include_directories(
     ${CMAKE_BINARY_DIR}/bin/
 )
 add_library(sppart_blas_lapack STATIC src/blas_lapack_interface.f90)
-target_link_libraries(sppart_test sppart_blas_lapack ${LAPACK_LIBRARIES})
-target_link_libraries(metis_test metis)
-target_link_libraries(mtmetis_test mtmetis wildriver)
+target_link_libraries(sppart_test sppart_blas_lapack ${LAPACK_LIBRARIES} julia)
+target_link_libraries(metis_test metis julia)
+target_link_libraries(mtmetis_test mtmetis wildriver julia)
 
 find_package(OpenMP)
 if(OpenMP_FOUND)
@@ -53,4 +53,5 @@ if(OpenMP_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(CMAKE_EXE_LINKER_FLAGS "-L${Julia_LIBRARY_DIR} -Wl,-rpath,${Julia_LIBRARY_DIR} -ljulia")
+# set(CMAKE_EXE_LINKER_FLAGS "-L${Julia_LIBRARY_DIR} -Wl,-rpath,${Julia_LIBRARY_DIR} -ljulia")
+set(CMAKE_EXE_LINKER_FLAGS "-L${Julia_LIBRARY_DIR} -Wl,-rpath,${Julia_LIBRARY_DIR}")
