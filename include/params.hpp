@@ -6,7 +6,7 @@ namespace Sppart{
     struct InputParams {
         int n_dims = 8;
         int fm_max_pass = 10;
-        int fm_limit = -1;
+        int fm_limit = 10000;
         bool fm_no_limit = false;
         int rand_seed = 0;
         int src_alg = 0;

@@ -31,10 +31,14 @@ namespace Sppart {
                 omp_set_nested(1);
                 const int outer_n_threads = std::min(n_dims, omp_get_max_threads());
                 const int inner_n_threads = std::max(omp_get_max_threads()/n_dims, 1);
-                #pragma omp parallel for num_threads(outer_n_threads)
-                for (int i = 0; i < n_dims; ++i){
-                    const int s = sources[i];
-                    bfs_mt_for(g.nv, g.xadj, g.adjncy, s, &dists[i*nv], inner_n_threads);
+                #pragma omp parallel num_threads(outer_n_threads)
+                {
+                    omp_set_num_threads(inner_n_threads);
+                    #pragma omp for
+                    for (int i = 0; i < n_dims; ++i){
+                        const int s = sources[i];
+                        gapbs::DOBFS(g, s, &dists[i*nv]);
+                    }
                 }
                 omp_set_nested(nested);
             }
@@ -46,29 +50,41 @@ namespace Sppart {
                 #pragma omp parallel for num_threads(outer_n_threads)
                 for (int i = 0; i < n_dims; ++i){
                     const int s = sources[i];
-                    bfs_mt_for_by_func(g.nv, g.xadj, g.adjncy, s, &dists[i*nv], inner_n_threads);
+                    bfs_mt_for(g.nv, g.xadj, g.adjncy, s, &dists[i*nv], inner_n_threads);
                 }
                 omp_set_nested(nested);
             }
             else if ( params.bfs_alg == 2 ) {
+                const int nested = omp_get_nested();
+                omp_set_nested(1);
+                const int outer_n_threads = std::min(n_dims, omp_get_max_threads());
+                const int inner_n_threads = std::max(omp_get_max_threads()/n_dims, 1);
+                #pragma omp parallel for num_threads(outer_n_threads)
+                for (int i = 0; i < n_dims; ++i){
+                    const int s = sources[i];
+                    bfs_mt_for_by_func(g.nv, g.xadj, g.adjncy, s, &dists[i*nv], inner_n_threads);
+                }
+                omp_set_nested(nested);
+            }
+            else if ( params.bfs_alg == 3 ) {
                 for (int i = 0; i < n_dims; ++i){
                     const int s = sources[i];
                     bfs_mt_for(g.nv, g.xadj, g.adjncy, s, &dists[i*nv], omp_get_max_threads());
                 }
             }
-            else if ( params.bfs_alg == 3 ) {
+            else if ( params.bfs_alg == 4 ) {
                 #pragma omp parallel for
                 for (int i = 0; i < n_dims; ++i){
                     const int s = sources[i];
                     bfs_std_queue(g.nv, g.xadj, g.adjncy, s, &dists[i*nv]);
                 }
             }
-            else if ( params.bfs_alg == 4 ) {
+            else if ( params.bfs_alg == 5 ) {
                 for (int i = 0; i < n_dims; ++i){
                     const int s = sources[i];
                     bfs_for(g.nv, g.xadj, g.adjncy, s, &dists[i*nv]);
                 }
-            } else if ( params.bfs_alg == 5 ) {
+            } else if ( params.bfs_alg == 6 ) {
                 msbfs_bitmap(g.nv, g.xadj, g.adjncy, n_dims, sources.data(), dists);
             }else if ( params.bfs_alg == 6 ) {
                 for (int i = 0; i < n_dims; ++i){

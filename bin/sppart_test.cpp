@@ -24,7 +24,7 @@ int main(int argc, char* argv[]){
     using XADJ_INT = int;
     
     std::string matrix_file_path = "";
-    bool use_double = false;
+    bool use_single = false;
     Sppart::InputParams params;
     int nparts = 2;
     std::string json_file_path = "";
@@ -46,12 +46,12 @@ int main(int argc, char* argv[]){
         ->default_val(10)
         ->check(CLI::Range(0,10000));
     app.add_option("--limit", params.fm_limit, "limit for FM refinement")
-        ->default_val(-1);
+        ->default_val(10000);
     app.add_flag("--nolimit", params.fm_no_limit, "Use no limit mode for FM refinement")
         ->default_val(false);
     app.add_option("--seed", params.rand_seed, "Seed for random number generator")
         ->default_val(0);
-    app.add_flag("--use_double_precision", use_double, "Use double precision instead of single precision")
+    app.add_flag("--use_single_precision", use_single, "Use signle precision instead of double precision")
         ->default_val(false);
     app.add_option("--roundalg", params.round_alg, "Rounding method for initialize partitioning with Fiedler vector")
         ->default_val(0);
@@ -80,12 +80,12 @@ int main(int argc, char* argv[]){
     std::unique_ptr<int[]> output_partition;
 
     double time_total = Sppart::timeit([&]{
-        if ( use_double ){
-            Sppart::RecursivePartitioner<XADJ_INT,double> partitioner(g, params);
+        if ( use_single ){
+            Sppart::RecursivePartitioner<XADJ_INT,float> partitioner(g, params);
             info = partitioner.run_partitioning(nparts);
             output_partition = partitioner.get_partition();
         }else{
-            Sppart::RecursivePartitioner<XADJ_INT,float> partitioner(g, params);
+            Sppart::RecursivePartitioner<XADJ_INT,double> partitioner(g, params);
             info = partitioner.run_partitioning(nparts);
             output_partition = partitioner.get_partition();
         }
@@ -159,7 +159,7 @@ int main(int argc, char* argv[]){
         json["param"]["maxpass"] = params.fm_max_pass;
         json["param"]["limit"] = params.fm_limit;
         json["param"]["nolimit"] = params.fm_no_limit;
-        json["param"]["use_double_precision"] = use_double;
+        json["param"]["use_single_precision"] = use_single;
         json["param"]["roundalg"] = params.round_alg;
         json["result"]["cut"] = info.cut;
         json["result"]["maxbal"] = info.maxbal;
