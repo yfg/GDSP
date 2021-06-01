@@ -26,11 +26,17 @@ int main(int argc, char* argv[]){
     int nparts = 2;
     std::string json_file_path = "";
     int n_trial = 1;
+    int rand_seed = 0;
+    double ubfactor = 1.001;
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
     app.add_option("--npart", nparts, "Number of part for partitioning")
         ->default_val(2);
+    app.add_option("--ub", ubfactor, "Unbalance tolerance")
+        ->default_val(1.001);
+    app.add_option("--seed", rand_seed, "Seed for random number generator")
+        ->default_val(0);
     app.add_option("--json", json_file_path, "File path for output JSON file");
     app.add_option("--ntry", n_trial, "Number of trial")
         ->default_val(1);
@@ -84,7 +90,9 @@ int main(int argc, char* argv[]){
             printf("options is null!\n");
             std::terminate();
         }
-        mtmetis_real_type ubvec = 1.001; // default is 1.001?
+        mtmetis_options[MTMETIS_OPTION_SEED] = rand_seed + i;
+        mtmetis_real_type ubvec = 1.001; // dummy, in fact, this is not used in mt-Metis
+        mtmetis_options[MTMETIS_OPTION_UBFACTOR] = ubfactor;
         // ret = METIS_SetDefaultOptions(mtmetis_options);
         // metis_options[METIS_OPTION_DBGLVL] = METIS_DBG_INFO;
         mtmetis_time_vec[i] = Sppart::timeit([&]{
@@ -92,6 +100,7 @@ int main(int argc, char* argv[]){
         });
         maxbal_vec[i] = Sppart::compute_maxbal(nparts, nv, xadj.data(), adjncy.data(), reinterpret_cast<int*>(part.data()));
         int cut2 = Sppart::compute_cut(nv, xadj.data(), adjncy.data(), reinterpret_cast<int*>(part.data()));
+        free(mtmetis_options);
         // if (mtmetis_options) {
         //     dl_free(mtmetis_options);
         // }
@@ -139,6 +148,8 @@ int main(int argc, char* argv[]){
         json["mat"] = mat_name;
         json["npart"] = nparts;
         json["nthreads"] = nthreads;
+        json["param"]["seed"] = rand_seed;
+        json["param"]["ub"] = ubfactor;
         json["result"]["cut"]["mean"] = cut_mean;
         json["result"]["cut"]["std"] = cut_stdev;
         json["result"]["maxbal"]["mean"] = maxbal_mean;
