@@ -25,12 +25,15 @@ int main(int argc, char* argv[]){
     std::string matrix_file_path = "";
     int nparts = 2;
     std::string json_file_path = "";
+    int n_trial = 1;
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
     app.add_option("--npart", nparts, "Number of part for partitioning")
         ->default_val(2);
     app.add_option("--json", json_file_path, "File path for output JSON file");
+    app.add_option("--ntry", n_trial, "Number of trial")
+        ->default_val(1);
 
     try {
         app.parse(argc, argv);
@@ -62,41 +65,71 @@ int main(int argc, char* argv[]){
     int objval = -1;
     int ret;
     std::vector<mtmetis_pid_type> part(nv);
+
     mtmetis_vtx_type* adjncy_ptr = reinterpret_cast<mtmetis_vtx_type*>(adjncy.data());
 
-    // int metis_options[METIS_NOPTIONS];
-    // double mtmetis_options[MTMETIS_NOPTIONS];
-    double *mtmetis_options = mtmetis_init_options();
-    if ( mtmetis_options == NULL ) {
-        printf("options is null!\n");
-        std::terminate();
-    }
+    std::vector<int> cut_vec(n_trial);
+    std::vector<double> maxbal_vec(n_trial);
+    std::vector<double> mtmetis_time_vec(n_trial);
 
-    mtmetis_real_type ubvec = 1.001; // default is 1.001?
-
-    // ret = METIS_SetDefaultOptions(mtmetis_options);
-    // metis_options[METIS_OPTION_DBGLVL] = METIS_DBG_INFO;
-    double mtmetis_time = Sppart::timeit([&]{
-        ret = MTMETIS_PartGraphRecursive(&nvtxs, &ncon, xadj_metis.data(), adjncy_ptr, NULL, NULL, NULL, &nparts_mt, NULL, &ubvec, mtmetis_options, &objval, part.data());
-    });
-    double maxbal = Sppart::compute_maxbal(nparts, nv, xadj.data(), adjncy.data(), reinterpret_cast<int*>(part.data()));
-    int cut2 = Sppart::compute_cut(nv, xadj.data(), adjncy.data(), reinterpret_cast<int*>(part.data()));
-
-    // if (mtmetis_options) {
-    //     dl_free(mtmetis_options);
-    // }
-    if ( ret != 1 || objval != cut2 ) {
-        printf("Something wrong with MTMETIS !!!\n");
-        std::terminate();
-    }
-
-    const int nthreads = omp_get_max_threads();
     printf("Git hash %s\n", GIT_COMMIT_HASH);
+    const int nthreads = omp_get_max_threads();
     printf("Num threads = %d\n", nthreads);
-    printf("mtmetis cut %d %d\n", ret, objval);
-    printf("mtmetis cut2 %d\n", cut2);
-    printf("mtmetis maxbal %lf\n", maxbal);
-    printf("mtmetis time %lf\n", mtmetis_time);
+
+    for (int i = 0; i < n_trial; ++i){
+        // int metis_options[METIS_NOPTIONS];
+        // double mtmetis_options[MTMETIS_NOPTIONS];
+        double *mtmetis_options = mtmetis_init_options();
+        if ( mtmetis_options == NULL ) {
+            printf("options is null!\n");
+            std::terminate();
+        }
+        mtmetis_real_type ubvec = 1.001; // default is 1.001?
+        // ret = METIS_SetDefaultOptions(mtmetis_options);
+        // metis_options[METIS_OPTION_DBGLVL] = METIS_DBG_INFO;
+        mtmetis_time_vec[i] = Sppart::timeit([&]{
+            ret = MTMETIS_PartGraphRecursive(&nvtxs, &ncon, xadj_metis.data(), adjncy_ptr, NULL, NULL, NULL, &nparts_mt, NULL, &ubvec, mtmetis_options, &objval, part.data());
+        });
+        maxbal_vec[i] = Sppart::compute_maxbal(nparts, nv, xadj.data(), adjncy.data(), reinterpret_cast<int*>(part.data()));
+        int cut2 = Sppart::compute_cut(nv, xadj.data(), adjncy.data(), reinterpret_cast<int*>(part.data()));
+        // if (mtmetis_options) {
+        //     dl_free(mtmetis_options);
+        // }
+        if ( ret != 1 || objval != cut2 ) {
+            printf("Something wrong with MTMETIS !!!\n");
+            std::terminate();
+        }
+
+        cut_vec[i] = objval;        
+        printf("mtmetis cut %d %d\n", ret, objval);
+        printf("mtmetis cut2 %d\n", cut2);
+        printf("mtmetis maxbal %lf\n", maxbal_vec[i]);
+        printf("mtmetis time %lf\n", mtmetis_time_vec[i]);
+    }
+
+    int cut_mean = 0, cut_stdev = 0;
+    double maxbal_mean = 0.0, maxbal_stdev = 0.0;
+    double mtmetis_time_mean = 0.0, mtmetis_time_stdev = 0.0;
+    for (int i = 0; i < n_trial; ++i){
+        cut_mean += cut_vec[i];
+        maxbal_mean += maxbal_vec[i];
+        mtmetis_time_mean += mtmetis_time_vec[i];
+    }
+    cut_mean = std::round(((double)cut_mean) / n_trial);
+    maxbal_mean /= n_trial;
+    mtmetis_time_mean /= n_trial;
+    for (int i = 0; i < n_trial; ++i){
+        cut_stdev += (cut_vec[i] - cut_mean)*(cut_vec[i] - cut_mean);
+        maxbal_stdev += (maxbal_vec[i] - maxbal_mean)*(maxbal_vec[i] - maxbal_mean);
+        mtmetis_time_stdev += (mtmetis_time_vec[i] - mtmetis_time_mean)*(mtmetis_time_vec[i] - mtmetis_time_mean);
+    }
+    cut_stdev = std::round(std::sqrt(((double)cut_stdev) / n_trial));
+    maxbal_stdev = std::sqrt(maxbal_stdev / n_trial);
+    mtmetis_time_stdev = std::sqrt(mtmetis_time_stdev / n_trial);
+
+    printf("mtmetis cut mean %d %d\n", cut_mean, cut_stdev);
+    printf("mtmetis maxbal mean %lf %lf\n", maxbal_mean, maxbal_stdev);
+    printf("mtmetis time %lf %lf\n", mtmetis_time_mean, mtmetis_time_stdev);
 
     if ( !json_file_path.empty() ){
         std::string mat_name = Sppart::get_filename_wo_ext(matrix_file_path);
@@ -106,9 +139,12 @@ int main(int argc, char* argv[]){
         json["mat"] = mat_name;
         json["npart"] = nparts;
         json["nthreads"] = nthreads;
-        json["result"]["cut"] = objval;
-        json["result"]["maxbal"] = maxbal;
-        json["result"]["time"]["total"] = mtmetis_time;
+        json["result"]["cut"]["mean"] = cut_mean;
+        json["result"]["cut"]["std"] = cut_stdev;
+        json["result"]["maxbal"]["mean"] = maxbal_mean;
+        json["result"]["maxbal"]["std"] = maxbal_stdev;
+        json["result"]["time"]["total"]["mean"] = mtmetis_time_mean;
+        json["result"]["time"]["total"]["std"] = mtmetis_time_stdev;
         std::ofstream fs(json_file_path);
         fs << json.dump(4) << std::endl;
     }
