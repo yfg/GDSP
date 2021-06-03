@@ -27,7 +27,9 @@ int main(int argc, char* argv[]){
     bool use_single = false;
     Sppart::InputParams params;
     int nparts = 2;
+    int random_seed = 0;
     std::string json_file_path = "";
+    int n_trial = 1;
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
@@ -49,13 +51,15 @@ int main(int argc, char* argv[]){
         ->default_val(10000);
     app.add_flag("--nolimit", params.fm_no_limit, "Use no limit mode for FM refinement")
         ->default_val(false);
-    app.add_option("--seed", params.rand_seed, "Seed for random number generator")
+    app.add_option("--seed", random_seed, "Seed for random number generator")
         ->default_val(0);
     app.add_flag("--use_single_precision", use_single, "Use signle precision instead of double precision")
         ->default_val(false);
     app.add_option("--roundalg", params.round_alg, "Rounding method for initialize partitioning with Fiedler vector")
         ->default_val(0);
     app.add_option("--json", json_file_path, "File path for output JSON file");
+    app.add_option("--ntry", n_trial, "Number of trials")
+        ->default_val(1);
 
     try {
         app.parse(argc, argv);
@@ -76,31 +80,8 @@ int main(int argc, char* argv[]){
         Sppart::preprocess_graph(nv0, xadj0, adjncy0, nv, xadj, adjncy); });
 
     Sppart::Graph<XADJ_INT> g(nv, xadj.data(), adjncy.data());
-    Sppart::OutputInfo info;
-    std::unique_ptr<int[]> output_partition;
-
-    double time_total = Sppart::timeit([&]{
-        if ( use_single ){
-            Sppart::RecursivePartitioner<XADJ_INT,float> partitioner(g, params);
-            info = partitioner.run_partitioning(nparts);
-            output_partition = partitioner.get_partition();
-        }else{
-            Sppart::RecursivePartitioner<XADJ_INT,double> partitioner(g, params);
-            info = partitioner.run_partitioning(nparts);
-            output_partition = partitioner.get_partition();
-        }
-    });    
-    double final_maxbal = Sppart::compute_maxbal(nparts, g.nv, g.xadj, g.adjncy, output_partition.get());
-    int cut2 = Sppart::compute_cut(g.nv, g.xadj, g.adjncy, output_partition.get());
-    printf("cut2 %d\n",cut2);
-
-    if ( info.cut != cut2 ) {
-        printf("Something wrong with Sppart !!!\n");
-        std::terminate();
-    }
 
     const int nthreads = omp_get_max_threads();
-
     printf("Git hash %s\n", GIT_COMMIT_HASH);
     printf("------ Execution info ------------\n");
     printf("Num threads = %d\n", nthreads);
@@ -116,19 +97,74 @@ int main(int argc, char* argv[]){
     printf("%-12s %10.4lf\n", "matread", time_matread);
     printf("%-12s %10.4lf\n", "preprocess", time_preprocess);
 
-    printf("------ Sppart params -------------\n");
-    if ( nparts == 2 ){
-        printf("pass count      : %d\n", info.fm_pass_count);
-        printf("Spectral cut    : %lld\n", info.spectral_cut);
-        printf("Spectral maxbal : %lf\n", info.spectral_maxbal);
+    std::vector<int> cut_vec(n_trial);
+    std::vector<double> maxbal_vec(n_trial);
+    std::vector<double> total_time_vec(n_trial);
+
+    Sppart::OutputInfo info;
+    double time_total_tmp;
+    for (int i = 0; i < n_trial; ++i){
+        params.rand_seed = random_seed + i;
+        std::unique_ptr<int[]> output_partition;
+
+        time_total_tmp = Sppart::timeit([&]{
+            if ( use_single ){
+                Sppart::RecursivePartitioner<XADJ_INT,float> partitioner(g, params);
+                info = partitioner.run_partitioning(nparts);
+                output_partition = partitioner.get_partition();
+            }else{
+                Sppart::RecursivePartitioner<XADJ_INT,double> partitioner(g, params);
+                info = partitioner.run_partitioning(nparts);
+                output_partition = partitioner.get_partition();
+            }
+        });    
+        double final_maxbal = Sppart::compute_maxbal(nparts, g.nv, g.xadj, g.adjncy, output_partition.get());
+        int cut2 = Sppart::compute_cut(g.nv, g.xadj, g.adjncy, output_partition.get());
+
+        printf("------ Sppart params -------------\n");
+        if ( nparts == 2 ){
+            printf("pass count      : %d\n", info.fm_pass_count);
+            printf("Spectral cut    : %lld\n", info.spectral_cut);
+            printf("Spectral maxbal : %lf\n", info.spectral_maxbal);
+        }
+        printf("Balance cut       : %lld\n", info.balance_cut);
+        printf("Balance maxbal    : %lf\n", info.balance_maxbal);
+        printf("Final cut       : %lld\n", info.cut);
+        printf("Final maxbal    : %lf\n", final_maxbal);
+
+        if ( info.cut != cut2 ) {
+            printf("Something wrong with Sppart !!!\n");
+            std::terminate();
+        }
+
+        cut_vec[i] = info.cut;
+        maxbal_vec[i] = final_maxbal;
+        total_time_vec[i] = time_total_tmp;
     }
-    printf("Balance cut       : %lld\n", info.balance_cut);
-    printf("Balance maxbal    : %lf\n", info.balance_maxbal);
-    printf("Final cut       : %lld\n", info.cut);
-    printf("Final maxbal    : %lf\n", final_maxbal);
+    // now variable "info" is that of the final trial
+
+    int cut_mean = 0, cut_stdev = 0;
+    double maxbal_mean = 0.0, maxbal_stdev = 0.0;
+    double total_time_mean = 0.0, total_time_stdev = 0.0;
+    for (int i = 0; i < n_trial; ++i){
+        cut_mean += cut_vec[i];
+        maxbal_mean += maxbal_vec[i];
+        total_time_mean += total_time_vec[i];
+    }
+    cut_mean = std::round(((double)cut_mean) / n_trial);
+    maxbal_mean /= n_trial;
+    total_time_mean /= n_trial;
+    for (int i = 0; i < n_trial; ++i){
+        cut_stdev += (cut_vec[i] - cut_mean)*(cut_vec[i] - cut_mean);
+        maxbal_stdev += (maxbal_vec[i] - maxbal_mean)*(maxbal_vec[i] - maxbal_mean);
+        total_time_stdev += (total_time_vec[i] - total_time_mean)*(total_time_vec[i] - total_time_mean);
+    }
+    cut_stdev = std::round(std::sqrt(((double)cut_stdev) / n_trial));
+    maxbal_stdev = std::sqrt(maxbal_stdev / n_trial);
+    total_time_stdev = std::sqrt(total_time_stdev / n_trial);
 
     printf("------ Timing result sppart ------\n");
-    printf("%-12s %10.3lf\n", "Total", time_total);
+    printf("%-12s %10.3lf\n", "Total", time_total_tmp);
     printf("    %-12s %10.3lf\n", "connect", info.time_connect);
     printf("    %-12s %10.3lf\n", "spectral", info.time_spectral);
     printf("        %-12s %10.3lf\n", "bfs", info.time_spectral_bfs);
@@ -142,6 +178,10 @@ int main(int argc, char* argv[]){
     printf("    %-12s %10.3lf\n", "balance", info.time_balance);
     printf("    %-12s %10.3lf\n", "fm", info.time_fm);
     printf("    %-12s %10.3lf\n", "split", info.time_split);
+
+    printf("sppart cut mean %d %d\n", cut_mean, cut_stdev);
+    printf("sppart maxbal mean %lf %lf\n", maxbal_mean, maxbal_stdev);
+    printf("sppart time %lf %lf\n", total_time_mean, total_time_stdev);
 
     if ( !json_file_path.empty() ){
         std::string mat_name = Sppart::get_filename_wo_ext(matrix_file_path);
@@ -161,9 +201,13 @@ int main(int argc, char* argv[]){
         json["param"]["nolimit"] = params.fm_no_limit;
         json["param"]["use_single_precision"] = use_single;
         json["param"]["roundalg"] = params.round_alg;
-        json["result"]["cut"] = info.cut;
-        json["result"]["maxbal"] = info.maxbal;
-        json["result"]["time"]["total"] = time_total;
+        json["result"]["cut"]["mean"] = cut_mean;
+        json["result"]["cut"]["std"] = cut_stdev;
+        json["result"]["maxbal"]["mean"] = maxbal_mean;
+        json["result"]["maxbal"]["std"] = maxbal_stdev;
+        json["result"]["time"]["total"]["mean"] = total_time_mean;
+        json["result"]["time"]["total"]["std"] = total_time_stdev;
+        json["result"]["time"]["total"]["last"] = time_total_tmp;
         json["result"]["time"]["connect"] = info.time_connect;
         json["result"]["time"]["spectral"]["total"] = info.time_spectral;
         json["result"]["time"]["spectral"]["bfs"] = info.time_spectral_bfs;

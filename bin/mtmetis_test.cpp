@@ -38,7 +38,7 @@ int main(int argc, char* argv[]){
     app.add_option("--seed", rand_seed, "Seed for random number generator")
         ->default_val(0);
     app.add_option("--json", json_file_path, "File path for output JSON file");
-    app.add_option("--ntry", n_trial, "Number of trial")
+    app.add_option("--ntry", n_trial, "Number of trials")
         ->default_val(1);
 
     try {
