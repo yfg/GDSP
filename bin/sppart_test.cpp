@@ -97,7 +97,7 @@ int main(int argc, char* argv[]){
     printf("%-12s %10.4lf\n", "matread", time_matread);
     printf("%-12s %10.4lf\n", "preprocess", time_preprocess);
 
-    std::vector<int> cut_vec(n_trial);
+    std::vector<int64_t> cut_vec(n_trial);
     std::vector<double> maxbal_vec(n_trial);
     std::vector<double> total_time_vec(n_trial);
 
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]){
     }
     // now variable "info" is that of the final trial
 
-    int cut_mean = 0, cut_stdev = 0;
+    int64_t cut_mean = 0, cut_stdev = 0;
     double maxbal_mean = 0.0, maxbal_stdev = 0.0;
     double total_time_mean = 0.0, total_time_stdev = 0.0;
     for (int i = 0; i < n_trial; ++i){
@@ -191,8 +191,9 @@ int main(int argc, char* argv[]){
         json["mat"] = mat_name;
         json["npart"] = nparts;
         json["nthreads"] = nthreads;
+        json["ntry"] = n_trial;
         json["param"]["ub"] = params.ubfactor;
-        json["param"]["seed"] = params.rand_seed;
+        json["param"]["seed"] = random_seed;
         json["param"]["dims"] = params.n_dims;
         json["param"]["srcalg"] = params.src_alg;
         json["param"]["bfsalg"] = params.bfs_alg;

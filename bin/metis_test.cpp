@@ -69,7 +69,7 @@ int main(int argc, char* argv[]){
     int objval = -1;
     int ret;
 
-    std::vector<int> cut_vec(n_trial);
+    std::vector<int64_t> cut_vec(n_trial);
     std::vector<double> maxbal_vec(n_trial);
     std::vector<double> metis_time_vec(n_trial);
 
@@ -99,7 +99,7 @@ int main(int argc, char* argv[]){
         printf("metis time %lf\n", metis_time_vec[i]);
     }
 
-    int cut_mean = 0, cut_stdev = 0;
+    int64_t cut_mean = 0, cut_stdev = 0;
     double maxbal_mean = 0.0, maxbal_stdev = 0.0;
     double metis_time_mean = 0.0, metis_time_stdev = 0.0;
     for (int i = 0; i < n_trial; ++i){
@@ -130,6 +130,7 @@ int main(int argc, char* argv[]){
         json["method"] = "metis";
         json["mat"] = mat_name;
         json["npart"] = nparts;
+        json["ntry"] = n_trial;
         json["param"]["seed"] = rand_seed;
         json["param"]["ub"] = ubfactor;
         json["result"]["cut"]["mean"] = cut_mean;
