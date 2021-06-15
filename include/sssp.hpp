@@ -37,7 +37,7 @@ namespace Sppart {
                     #pragma omp for
                     for (int i = 0; i < n_dims; ++i){
                         const int s = sources[i];
-                        gapbs::DOBFS(g, s, &dists[i*nv]);
+                        gapbs::DOBFS(g, s, &dists[i*nv], params.dobfs_td);
                     }
                 }
                 omp_set_nested(nested);
@@ -120,7 +120,7 @@ namespace Sppart {
         for (int i = 0; i < n_dims; ++i){
             info.time_spectral_bfs += timeit([&]{
                 if ( params.bfs_alg == 0 ) {
-                    gapbs::DOBFS(g, source, &dists[i*nv]);
+                    gapbs::DOBFS(g, source, &dists[i*nv], params.dobfs_td);
                 } else if ( params.bfs_alg == 1 ) {
                     bfs_mt_for(g.nv, g.xadj, g.adjncy, source, &dists[i*nv], omp_get_max_threads());
                 } else {

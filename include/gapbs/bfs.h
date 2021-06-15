@@ -123,7 +123,7 @@ namespace gapbs{
   }
 
   template<class XADJ_INT, class FLOAT> // assuming FLOAT is float or double
-  pvector<NodeID> DOBFS(const Sppart::Graph<XADJ_INT> &g, NodeID source, FLOAT* const dists, int alpha = 15,
+  pvector<NodeID> DOBFS(const Sppart::Graph<XADJ_INT> &g, NodeID source, FLOAT* const dists, const bool force_top_down, int alpha = 15,
                         int beta = 18) {
     pvector<NodeID> parent = InitParent(g);
     parent[source] = source;
@@ -142,7 +142,8 @@ namespace gapbs{
 
     while (!queue.empty()) {
       depth += 1.0;
-      if (scout_count > edges_to_check / alpha) {
+      // if (scout_count > edges_to_check / alpha) {
+      if ( !force_top_down && (scout_count > edges_to_check / alpha) ) {
         int64_t awake_count, old_awake_count;
         QueueToBitmap(queue, front);
         awake_count = queue.size();

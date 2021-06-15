@@ -15,6 +15,7 @@ namespace Sppart{
         double ubfactor = 1.001;
         int orth_alg = 0;
         int xty_alg = 0;
+        bool dobfs_td = false;
     };
 
     struct OutputInfo {

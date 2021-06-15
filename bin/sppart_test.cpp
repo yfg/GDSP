@@ -64,6 +64,8 @@ int main(int argc, char* argv[]){
         ->default_val(0);
     app.add_option("--xtyalg", params.xty_alg, "Algorithm for transpose(X)*Y")
         ->default_val(0);
+    app.add_flag("--dobfstd", params.dobfs_td, "Force direction optimaized BFS to always use top-down scheme")
+        ->default_val(false);
 
     try {
         app.parse(argc, argv);
