@@ -13,6 +13,7 @@ namespace Sppart{
         int bfs_alg = 0;
         int round_alg = 0;
         double ubfactor = 1.001;
+        int orth_alg = 0;
     };
 
     struct OutputInfo {

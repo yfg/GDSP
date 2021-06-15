@@ -319,24 +319,24 @@ end subroutine
 subroutine ssygv_sppart_lapack(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, info) bind(c)
     use iso_c_binding
     implicit none
-    character(c_char) :: itype, jobz, uplo
-    integer(c_int) :: n, lda, ldb, lwork, info
+    character(c_char) :: jobz, uplo
+    integer(c_int) :: itype, n, lda, ldb, lwork, info
     real(c_float) :: A(*), B(*), w(*), work(*)
     call ssygv(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, info)
 end subroutine
 subroutine dsygv_sppart_lapack(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, info) bind(c)
     use iso_c_binding
     implicit none
-    character(c_char) :: itype, jobz, uplo
-    integer(c_int) :: n, lda, ldb, lwork, info
+    character(c_char) :: jobz, uplo
+    integer(c_int) :: itype, n, lda, ldb, lwork, info
     real(c_double) :: A(*), B(*), w(*), work(*)
     call dsygv(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, info)
 end subroutine
 subroutine chegv_sppart_lapack(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, rwork, info) bind(c)
     use iso_c_binding
     implicit none
-    character(c_char) :: itype, jobz, uplo
-    integer(c_int) :: n, lda, ldb, lwork, info
+    character(c_char) :: jobz, uplo
+    integer(c_int) :: itype, n, lda, ldb, lwork, info
     complex(c_double_complex) :: A(*), B(*), w(*), work(*)
     real(c_double) :: rwork(*)
     call chegv(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, rwork, info)
@@ -344,8 +344,8 @@ end subroutine
 subroutine zhegv_sppart_lapack(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, rwork, info) bind(c)
     use iso_c_binding
     implicit none
-    character(c_char) :: itype, jobz, uplo
-    integer(c_int) :: n, lda, ldb, lwork, info
+    character(c_char) :: jobz, uplo
+    integer(c_int) :: itype, n, lda, ldb, lwork, info
     complex(c_double_complex) :: A(*), B(*), w(*), work(*)
     real(c_double) :: rwork(*)
     call zhegv(itype, jobz, uplo, n, A, lda, B, ldb, w, work, lwork, rwork, info)

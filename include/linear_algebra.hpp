@@ -86,8 +86,9 @@ namespace Sppart{
         }
     }
 
+    // Standard eigenvalue problem
     template<class FT> // assuming FT is float or double
-    void calc_eigvecs(const int n, FT* const A){
+    void calc_eigvecs_std(const int n, FT* const A){
         const char jobz = 'V';
         const char uplo = 'U';
         int info;
@@ -111,6 +112,33 @@ namespace Sppart{
         return;
     }
     
+    // Generalized eigenvalue problem
+    template<class FT> // assuming FT is float or double
+    void calc_eigvecs_gen(const int n, FT* const A, FT* const B){
+        const int itype = 1;
+        const char jobz = 'V';
+        const char uplo = 'U';
+        int info;
+        FT tmp, dummy;
+        int lwork = -1;
+        std::vector<FT> eigval(n);
+        // working space query
+        lapack::hegv(&itype, &jobz, &uplo, &n, A, &n, B, &n, eigval.data(), &tmp, &lwork, &dummy, &info);
+        if ( info != 0 ){
+            printf("Error: Lapack hegv 1 error! info = %d\n", info);
+            std::terminate();
+        }
+
+        lwork = static_cast<int>(tmp);
+        std::vector<FT> work(lwork);
+        lapack::hegv(&itype, &jobz, &uplo, &n, A, &n, B, &n, eigval.data(), work.data(), &lwork, &dummy, &info);
+        if ( info != 0 ){
+            printf("Error: Lapack hegv 2 error! info = %d\n", info);
+            std::terminate();
+        }
+        return;
+    }
+
     // Y[:,0:k] = X*A[:,0:k] (numpy notation)
     template<class FT> // assuming FT is float or double
     void back_transform(const int m, const int n, const int k, const FT* const X, const FT* const A, FT* const Y){

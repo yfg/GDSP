@@ -99,7 +99,7 @@ namespace Sppart {
 
             compute_ssspd_basis(g, X.get(), params, rand_engine, info);
 
-            compute_fiedler_rayleigh_ritz(params.n_dims, g, X.get(), Y.get(), info);
+            compute_fiedler_rayleigh_ritz(params.n_dims, g, params, X.get(), Y.get(), info);
 
             Timer timer_round; timer_round.start();
             SpectralBipartitioner<XADJ_INT,FLOAT> spb = fiedler_partition(Y.get(), g, params, in_target_weights_ratio, rand_engine, info);
@@ -222,23 +222,37 @@ namespace Sppart {
         // compute fiedler vector by Rayleigh-Ritz procedure
         // X: g.nv x n_dims matrix. column-major. contains basis for Rayleigh-Ritz in its columns.
         // Y: g.nv x n_dims matrix. column-major. Fiedler vector is returned in the first g.nv elements of Y
-        static void compute_fiedler_rayleigh_ritz(const int n_dims, const Graph<XADJ_INT>& g, FLOAT* const X, FLOAT* const Y, OutputInfo& info){
+        static void compute_fiedler_rayleigh_ritz(const int n_dims, const Graph<XADJ_INT>& g,  const InputParams& params, FLOAT* const X, FLOAT* const Y, OutputInfo& info){
             info.time_spectral_sumzero += timeit([&]{
                 make_sum_to_zero(g.nv, n_dims, X); });
 
-            info.time_spectral_orth += timeit([&]{
-                orthonormalize(g.nv, n_dims, X); });
+            if ( params.orth_alg == 0 ){
+                info.time_spectral_orth += timeit([&]{
+                    orthonormalize(g.nv, n_dims, X); });
+            } else if ( params.orth_alg == 1 ){
+                // do nothing
+            } else {
+                printf("Error: No such orthonormalization method\n");
+                std::terminate();
+            }
 
             info.time_spectral_spmm += timeit([&]{
                 mult_laplacian_naive(g.nv, n_dims, g.xadj, g.adjncy, X, Y); });
 
-            std::vector<FLOAT> c(n_dims*n_dims);
+            std::vector<FLOAT> c(n_dims*n_dims), c2(n_dims*n_dims);
 
             info.time_spectral_XtY += timeit([&]{
                 calc_XtY(g.nv, n_dims, X, Y, c.data()); });
 
-            info.time_spectral_eig += timeit([&]{
-                calc_eigvecs(n_dims, c.data()); });
+            if ( params.orth_alg == 0 ){
+                info.time_spectral_eig += timeit([&]{
+                    calc_eigvecs_std(n_dims, c.data()); });
+            } else if ( params.orth_alg == 1 ){
+                info.time_spectral_XtY += timeit([&]{
+                    calc_XtY(g.nv, n_dims, X, X, c2.data()); });
+                info.time_spectral_eig += timeit([&]{
+                    calc_eigvecs_gen(n_dims, c.data(), c2.data()); });
+            }
 
             info.time_spectral_back += timeit([&]{
                 back_transform(g.nv, 1, n_dims, X, c.data(), Y); });
