@@ -61,13 +61,31 @@ namespace Sppart{
     }
 
     template<class FT> // assuming FT is float or double
-    void calc_XtY(const int m, const int n, const FT* const X, const FT* const Y, FT* const ret){
-        assert(m >= n);
+    void calc_XtY_gemm(const int m, const int n, const FT* const X, const FT* const Y, FT* const ret){
+        // assert(m >= n);
         const char transa = 'T';
         const char transb = 'N';
         const FT alpha = 1.0;
         const FT beta = 0.0;
         blas::gemm(&transa, &transb, &n, &n, &m, &alpha, X, &m, Y, &m, &beta, ret, &n);        
+    }
+
+    template<class FT> // assuming FT is float or double
+    void calc_XtY_org(const int m, const int n, const FT* const X, const FT* const Y, FT* const ret){
+        // Only upper triangular part is computed
+        // assert(m >= n);
+        for (size_t i = 0; i < n; ++i){
+            for (size_t j = i; j < n; ++j){ // upper triangular part
+                const FT* const X_ptr = X + i*m;
+                const FT* const Y_ptr = Y + j*m;
+                FT sum = 0.0;
+                #pragma omp parallel for reduction(+:sum)
+                for (size_t k = 0; k < m; ++k){
+                    sum += X_ptr[k]*Y_ptr[k];
+                }
+                ret[j*n + i] = sum;
+            }
+        }
     }
 
     // Compute Y = L*X;

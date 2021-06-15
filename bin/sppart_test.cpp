@@ -62,6 +62,8 @@ int main(int argc, char* argv[]){
         ->default_val(1);
     app.add_option("--orthalg", params.orth_alg, "Algorithm for orthonormalization")
         ->default_val(0);
+    app.add_option("--xtyalg", params.xty_alg, "Algorithm for transpose(X)*Y")
+        ->default_val(0);
 
     try {
         app.parse(argc, argv);

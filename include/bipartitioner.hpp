@@ -222,7 +222,7 @@ namespace Sppart {
         // compute fiedler vector by Rayleigh-Ritz procedure
         // X: g.nv x n_dims matrix. column-major. contains basis for Rayleigh-Ritz in its columns.
         // Y: g.nv x n_dims matrix. column-major. Fiedler vector is returned in the first g.nv elements of Y
-        static void compute_fiedler_rayleigh_ritz(const int n_dims, const Graph<XADJ_INT>& g,  const InputParams& params, FLOAT* const X, FLOAT* const Y, OutputInfo& info){
+        static void compute_fiedler_rayleigh_ritz(const int n_dims, const Graph<XADJ_INT>& g, const InputParams& params, FLOAT* const X, FLOAT* const Y, OutputInfo& info){
             info.time_spectral_sumzero += timeit([&]{
                 make_sum_to_zero(g.nv, n_dims, X); });
 
@@ -242,14 +242,14 @@ namespace Sppart {
             std::vector<FLOAT> c(n_dims*n_dims), c2(n_dims*n_dims);
 
             info.time_spectral_XtY += timeit([&]{
-                calc_XtY(g.nv, n_dims, X, Y, c.data()); });
+                calc_XtY(params, g.nv, n_dims, X, Y, c.data()); });
 
             if ( params.orth_alg == 0 ){
                 info.time_spectral_eig += timeit([&]{
                     calc_eigvecs_std(n_dims, c.data()); });
             } else if ( params.orth_alg == 1 ){
                 info.time_spectral_XtY += timeit([&]{
-                    calc_XtY(g.nv, n_dims, X, X, c2.data()); });
+                    calc_XtY(params, g.nv, n_dims, X, X, c2.data()); });
                 info.time_spectral_eig += timeit([&]{
                     calc_eigvecs_gen(n_dims, c.data(), c2.data()); });
             }
@@ -258,6 +258,17 @@ namespace Sppart {
                 back_transform(g.nv, 1, n_dims, X, c.data(), Y); });
 
             fix_sign(g.nv, Y);
+        }
+
+        static void calc_XtY(const InputParams& params, const int m, const int n, const FLOAT* const X, const FLOAT* const Y, FLOAT* const ret){
+            if ( params.xty_alg == 0) {
+                calc_XtY_gemm(m, n, X, Y, ret);
+            } else if ( params.xty_alg == 1){
+                calc_XtY_org(m, n, X, Y, ret);
+            } else{
+                printf("Error: No such XtY implementation\n");
+                std::terminate();
+            }
         }
 
         // Determine partition using the fiedler vector

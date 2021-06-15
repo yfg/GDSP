@@ -14,6 +14,7 @@ namespace Sppart{
         int round_alg = 0;
         double ubfactor = 1.001;
         int orth_alg = 0;
+        int xty_alg = 0;
     };
 
     struct OutputInfo {
