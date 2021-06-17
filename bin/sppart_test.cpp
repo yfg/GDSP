@@ -30,6 +30,7 @@ int main(int argc, char* argv[]){
     int random_seed = 0;
     std::string json_file_path = "";
     int n_trial = 1;
+    bool fix_seed = false;
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
@@ -65,6 +66,8 @@ int main(int argc, char* argv[]){
     app.add_option("--xtyalg", params.xty_alg, "Algorithm for transpose(X)*Y")
         ->default_val(0);
     app.add_flag("--dobfstd", params.dobfs_td, "Force direction optimaized BFS to always use top-down scheme")
+        ->default_val(false);
+    app.add_flag("--fixseed", fix_seed, "Fix random seed for multiple trials")
         ->default_val(false);
 
     try {
@@ -109,8 +112,8 @@ int main(int argc, char* argv[]){
 
     Sppart::OutputInfo info;
     double time_total_tmp;
+    params.rand_seed = random_seed;
     for (int i = 0; i < n_trial; ++i){
-        params.rand_seed = random_seed + i;
         std::unique_ptr<int[]> output_partition;
 
         time_total_tmp = Sppart::timeit([&]{
@@ -146,6 +149,8 @@ int main(int argc, char* argv[]){
         cut_vec[i] = info.cut;
         maxbal_vec[i] = final_maxbal;
         total_time_vec[i] = time_total_tmp;
+
+        if ( ! fix_seed ) params.rand_seed++;
     }
     // now variable "info" is that of the final trial
 
@@ -198,6 +203,7 @@ int main(int argc, char* argv[]){
         json["npart"] = nparts;
         json["nthreads"] = nthreads;
         json["ntry"] = n_trial;
+        json["fixseed"] = fix_seed;
         json["param"]["ub"] = params.ubfactor;
         json["param"]["seed"] = random_seed;
         json["param"]["dims"] = params.n_dims;
@@ -208,6 +214,9 @@ int main(int argc, char* argv[]){
         json["param"]["nolimit"] = params.fm_no_limit;
         json["param"]["use_single_precision"] = use_single;
         json["param"]["roundalg"] = params.round_alg;
+        json["param"]["orthalg"] = params.orth_alg;
+        json["param"]["xtyalg"] = params.xty_alg;
+        json["param"]["dobfstd"] = params.dobfs_td;
         json["result"]["cut"]["mean"] = cut_mean;
         json["result"]["cut"]["std"] = cut_stdev;
         json["result"]["maxbal"]["mean"] = maxbal_mean;

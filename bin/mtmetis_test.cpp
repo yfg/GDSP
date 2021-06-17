@@ -28,6 +28,7 @@ int main(int argc, char* argv[]){
     int n_trial = 1;
     int rand_seed = 0;
     double ubfactor = 1.001;
+    bool fix_seed = false;
     app.add_option("--mat", matrix_file_path, "File path of MATLAB mat file for input graph (matrix) from SuiteSparse Matrix Collection")
         ->required(true)
         ->check(CLI::ExistingFile);
@@ -40,6 +41,8 @@ int main(int argc, char* argv[]){
     app.add_option("--json", json_file_path, "File path for output JSON file");
     app.add_option("--ntry", n_trial, "Number of trials")
         ->default_val(1);
+    app.add_flag("--fixseed", fix_seed, "Fix random seed for multiple trials")
+        ->default_val(false);
 
     try {
         app.parse(argc, argv);
@@ -90,7 +93,7 @@ int main(int argc, char* argv[]){
             printf("options is null!\n");
             std::terminate();
         }
-        mtmetis_options[MTMETIS_OPTION_SEED] = rand_seed + i;
+        mtmetis_options[MTMETIS_OPTION_SEED] = rand_seed;
         mtmetis_real_type ubvec = 1.001; // dummy, in fact, this is not used in mt-Metis
         mtmetis_options[MTMETIS_OPTION_UBFACTOR] = ubfactor;
         // ret = METIS_SetDefaultOptions(mtmetis_options);
@@ -114,6 +117,8 @@ int main(int argc, char* argv[]){
         printf("mtmetis cut2 %d\n", cut2);
         printf("mtmetis maxbal %lf\n", maxbal_vec[i]);
         printf("mtmetis time %lf\n", mtmetis_time_vec[i]);
+
+        if ( ! fix_seed ) rand_seed++;
     }
 
     int64_t cut_mean = 0, cut_stdev = 0;
@@ -149,6 +154,7 @@ int main(int argc, char* argv[]){
         json["npart"] = nparts;
         json["nthreads"] = nthreads;
         json["ntry"] = n_trial;
+        json["fixseed"] = fix_seed;
         json["param"]["seed"] = rand_seed;
         json["param"]["ub"] = ubfactor;
         json["result"]["cut"]["mean"] = cut_mean;
