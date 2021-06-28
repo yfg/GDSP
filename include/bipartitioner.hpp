@@ -765,7 +765,8 @@ namespace Sppart {
                 int i_mincut = -1;
                 int try_count = 0;
 
-                for (int i = 0; i < g.nv; ++i){
+                const int max_move = params.fm_max_move >= 0 ? std::min(params.fm_max_move, g.nv) : g.nv;
+                for (int i = 0; i < max_move; ++i){
                     const int from_part = target_weights[0] - part_weights[0] < target_weights[1] - part_weights[1] ? 0 : 1;
                     const int to_part = other(from_part);
                     if ( gain_queues[from_part].empty() ) {

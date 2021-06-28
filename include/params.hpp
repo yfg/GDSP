@@ -16,6 +16,7 @@ namespace Sppart{
         int orth_alg = 0;
         int xty_alg = 0;
         bool dobfs_td = false;
+        int fm_max_move = -1;
     };
 
     struct OutputInfo {

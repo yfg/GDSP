@@ -69,6 +69,8 @@ int main(int argc, char* argv[]){
         ->default_val(false);
     app.add_flag("--fixseed", fix_seed, "Fix random seed for multiple trials")
         ->default_val(false);
+    app.add_option("--fmmaxmove", params.fm_max_move, "Maximum move counts for FM refinement. If it is negative, treated as the number of vertices.")
+        ->default_val(-1);
 
     try {
         app.parse(argc, argv);
