@@ -188,6 +188,21 @@ namespace Sppart {
             return vtx;
         }
 
+        int see_top_val(){
+            return (this->nnodes == 0 ? -1 : heap[0].val);
+        }
+
+        int see_top_key(){
+            // if (this->nnodes == 0){
+            //     // Todo assert
+            // }
+            return heap[0].key;
+        }
+
+        bool contains(int node){
+            return locator[node] != -1;
+        }
+
         void reset(){
             #pragma omp parallel for
             for (int i = nnodes-1; i >= 0; --i){

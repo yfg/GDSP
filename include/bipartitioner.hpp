@@ -883,6 +883,206 @@ namespace Sppart {
             return pass_count;
         }
 
+        int fm_refinement_hill_climb(const int max_pass){
+            printf("fm_refinement_hill_climb is under development. do not use it.\n");
+            std::terminate();
+
+            std::array<int, 2> target_weights;
+            target_weights[0] = g.nv*target_weights_ratio[0];
+            target_weights[1] = g.nv - target_weights[0];
+
+            // Create vertex gain priority queue for each part
+            // Key is vertex_id and Value is gain value
+            std::array<PriorityQueue, 2> gain_queues = {PriorityQueue(g.nv), PriorityQueue(g.nv)};
+
+            auto locked = create_up_array<bool>(g.nv);
+            auto is_in_hill = create_up_array<bool>(g.nv);
+            auto touched_hill_search = create_up_array<bool>(g.nv);
+            auto vertex_id_history = create_up_array<int>(g.nv);
+            #pragma omp parallel for
+            for (int i = 0; i < g.nv; ++i){
+                locked[i] = false;
+                is_in_hill[i] = false;
+                touched_hill_search[i] = false;
+            }
+    
+            int pass_count = 0;
+            for (int i_pass = 0; i_pass < max_pass; ++i_pass){
+                printf("ipass = %d\n", i_pass);
+                pass_count++;
+
+                gain_queues[0].reset();
+                gain_queues[1].reset();
+
+                std::vector<int> perm(blist.get_length());
+                std::iota(perm.begin(), perm.end(), 0); // perm = [0, 1, ...]
+                std::shuffle(perm.begin(), perm.end(), rand_engine);
+                for (int i = 0; i < blist.get_length(); ++i){
+                    const int j = blist.get_boundary_at(perm[i]);
+                    const int gain = external_degrees[j] - internal_degrees[j];
+                    gain_queues[bipartition[j]].insert(j, gain);
+                }
+    
+                const int init_cut = cut;
+                int move_count = 0;
+
+                auto traversed = create_up_array<bool>(g.xadj[g.nv]);
+                #pragma omp parallel for
+                for (int i = 0; i < g.xadj[g.nv]; ++i){
+                    traversed[i] = false;
+                }
+
+                for (int i = 0; i < g.nv; ++i){
+                    int from_part;
+                    int gain0 = gain_queues[0].see_top_val();
+                    int gain1 = gain_queues[1].see_top_val();                    
+                    if ( !gain_queues[0].empty() && (std::max(part_weights[0]-1, part_weights[1]+1) < g.nv*0.5*params.ubfactor) ){
+                        if ( !gain_queues[1].empty() && (std::max(part_weights[1]-1, part_weights[0]+1) < g.nv*0.5*params.ubfactor) ) {
+                            // both moves are feasible
+                            from_part = gain0 > gain1 ? 0 : 1;
+                        }else{
+                            // only 0 -> 1 move is feasible
+                            from_part = 0;
+                        }
+                    }else{
+                        if ( !gain_queues[1].empty() && (std::max(part_weights[1]-1, part_weights[0]+1) < g.nv*0.5*params.ubfactor) ) {
+                            // only 1 -> 0 move is feasible
+                            from_part = 1;
+                        }else{
+                            // both moves are not feasible, make balance better
+                            from_part = target_weights[0] - part_weights[0] < target_weights[1] - part_weights[1] ? 0 : 1;
+                            if ( gain_queues[from_part].empty() ) break;
+                        }
+                    }
+                    // const int from_part = target_weights[0] - part_weights[0] < target_weights[1] - part_weights[1] ? 0 : 1;
+                    const int to_part = other(from_part);
+
+                    if ( gain_queues[from_part].empty() ) {
+                        break;
+                    }
+
+                    int v = gain_queues[from_part].get_top();
+                    int gain = external_degrees[v] - internal_degrees[v];
+                    std::vector<int> vertices_to_move;
+                    std::vector<int> vertices_in_queue_non_boundary;
+                    std::vector<int> vertices_touched;
+                    vertices_to_move.push_back(v);
+                    vertices_touched.push_back(v);
+                    int move_size = 1;
+                    is_in_hill[v] = true;
+                    touched_hill_search[v] = true;
+
+                    int hill_ed = external_degrees[v]; // hill external degree
+                    int hill_id = internal_degrees[v]; // hill internal degree
+                    while ( gain < 0 && move_size < 100 && std::max(part_weights[from_part]-move_size, part_weights[to_part]+move_size) < g.nv*0.5*params.ubfactor ) { // hill climing loop
+                        // Add the neighbors of candidate to the queue even if they are not boundary vertices
+                        for ( XADJ_INT k = g.xadj[v]; k < g.xadj[v+1]; ++k){
+                            int u = g.adjncy[k];
+                            if ( traversed[k] || locked[u] || is_in_hill[v] || touched_hill_search[u] || bipartition[u] != from_part ) continue; 
+                            if ( !gain_queues[from_part].contains(u) ) gain_queues[from_part].insert(u, external_degrees[u] - internal_degrees[u]);
+                            traversed[k] = true;
+                            touched_hill_search[u] = true;
+                            vertices_touched.push_back(u);
+                            if ( !blist.is_boundary(u) ) vertices_in_queue_non_boundary.push_back(u);
+                        }
+                        if ( gain_queues[from_part].empty() ) break;
+                        v = gain_queues[from_part].get_top();
+                        is_in_hill[v] = true;
+                        vertices_to_move.push_back(v);
+                        move_size++;
+                        hill_ed += external_degrees[v];
+                        hill_id += internal_degrees[v];
+
+                        gain = hill_ed - hill_id;
+                        printf("%d: v %d gain %d\n", move_size, v, gain);
+                    }
+
+                    for ( int u : vertices_touched ) touched_hill_search[u] = false;
+                    
+                    for ( int u : vertices_in_queue_non_boundary ){
+                        if ( !is_in_hill[u] ) {
+                            gain_queues[from_part].remove(u);
+                        }
+                    }
+
+                    if ( gain < 0 ){
+                        for ( int u : vertices_to_move ){
+                            is_in_hill[u] = false; // for next iteration
+                        }
+                        continue;
+                    }
+
+                    cut -= gain;
+            
+                    part_weights[from_part] -= move_size;
+                    part_weights[to_part] += move_size;
+
+                    if ( move_size > 1 && gain >= 0 ){
+                        printf("hill building finish gain = %d size = %d\n", gain, move_size);
+                    }
+
+                    for ( int u : vertices_to_move ){
+                        locked[u] = true;
+                        bipartition[u] = to_part;
+                        is_in_hill[u] = false;
+                        vertex_id_history[move_count++] = u;
+                        // Swap ed id
+                        std::swap(external_degrees[u], internal_degrees[u]);
+                        if ( blist.is_boundary(u) && external_degrees[u] == 0 && g.xadj[u] < g.xadj[u+1] ){
+                            blist.remove(u);
+                        }
+                        if ( !blist.is_boundary(u) && external_degrees[u] > 0 ){
+                            blist.insert(u);
+                        }
+                        for ( XADJ_INT k = g.xadj[u]; k < g.xadj[u+1]; ++k){
+                            const int j = g.adjncy[k];
+                            if ( is_in_hill[j] ) continue;
+                            const int w = to_part == bipartition[j] ? 1 : -1;
+                            internal_degrees[j] += w;
+                            external_degrees[j] -= w;
+
+                            if ( blist.is_boundary(j) ){
+                                if ( external_degrees[j] == 0 ){
+                                    blist.remove(j);
+                                    if ( !locked[j] ){
+                                        gain_queues[bipartition[j]].remove(j); // just remove j from queue
+                                    }
+                                }else{
+                                    if ( !locked[j] ){
+                                        const int new_gain = external_degrees[j] - internal_degrees[j];
+                                        if ( gain_queues[bipartition[j]].contains(j) ) //!!!!!!!!!!!
+                                            gain_queues[bipartition[j]].update(j, new_gain);
+                                    }
+                                }                    
+                            }else{
+                                if ( external_degrees[j] > 0 ){
+                                    blist.insert(j);
+                                    if (!locked[j]){
+                                        const int new_gain = external_degrees[j] - internal_degrees[j];
+                                        gain_queues[bipartition[j]].insert(j, new_gain);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    printf("cut %d maxbal %lf\n", cut, get_maxbal());
+                }
+
+                // Clear locked array
+                #pragma omp parallel for
+                for (int i = 0; i < move_count; ++i){
+                    locked[vertex_id_history[i]] = false;
+                }
+
+                if ( cut == init_cut ){
+                    break; // break from i_pass loop
+                }
+            }
+            return pass_count;
+        }
+
+
         int fm_refinement_allow_worse_balance(const int max_pass, const double ubfactor){
             // const int max_pass = params.fm_max_pass;
             const bool no_limit = params.fm_no_limit;
