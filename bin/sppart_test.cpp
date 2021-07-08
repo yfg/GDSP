@@ -221,11 +221,14 @@ int main(int argc, char* argv[]){
         json["param"]["dobfstd"] = params.dobfs_td;
         json["result"]["cut"]["mean"] = cut_mean;
         json["result"]["cut"]["std"] = cut_stdev;
+        json["result"]["cut"]["all"] = cut_vec;
         json["result"]["maxbal"]["mean"] = maxbal_mean;
         json["result"]["maxbal"]["std"] = maxbal_stdev;
+        json["result"]["maxbal"]["all"] = maxbal_vec;
         json["result"]["time"]["total"]["mean"] = total_time_mean;
         json["result"]["time"]["total"]["std"] = total_time_stdev;
         json["result"]["time"]["total"]["last"] = time_total_tmp;
+        json["result"]["time"]["total"]["all"] = total_time_vec;
         json["result"]["time"]["connect"] = info.time_connect;
         json["result"]["time"]["spectral"]["total"] = info.time_spectral;
         json["result"]["time"]["spectral"]["bfs"] = info.time_spectral_bfs;

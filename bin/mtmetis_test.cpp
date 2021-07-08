@@ -159,10 +159,13 @@ int main(int argc, char* argv[]){
         json["param"]["ub"] = ubfactor;
         json["result"]["cut"]["mean"] = cut_mean;
         json["result"]["cut"]["std"] = cut_stdev;
+        json["result"]["cut"]["all"] = cut_vec;
         json["result"]["maxbal"]["mean"] = maxbal_mean;
         json["result"]["maxbal"]["std"] = maxbal_stdev;
+        json["result"]["maxbal"]["all"] = maxbal_vec;
         json["result"]["time"]["total"]["mean"] = mtmetis_time_mean;
         json["result"]["time"]["total"]["std"] = mtmetis_time_stdev;
+        json["result"]["time"]["total"]["all"] = mtmetis_time_vec;
         std::ofstream fs(json_file_path);
         fs << json.dump(4) << std::endl;
     }
