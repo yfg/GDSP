@@ -72,4 +72,26 @@ namespace Sppart {
         }
         return vec[0];
     }
+
+    // Create a graph of the upper triangular part of the input graph
+    // Input graph must be undirected and has no self loop
+    template<class XADJ_INT>
+    void create_upper_triangular(const int nv, const std::vector<XADJ_INT> &in_xadj, const std::vector<int> &in_adjncy, std::vector<XADJ_INT> &out_xadj, std::vector<int> &out_adjncy){
+        out_xadj.resize(in_xadj.size());
+        out_adjncy.resize(in_adjncy.size() / 2);
+
+        XADJ_INT cnt = 0;
+        for (int i = 0; i < nv; ++i){
+            out_xadj[i] = cnt;
+            for (XADJ_INT k = in_xadj[i]; k < in_xadj[i+1]; ++k){
+                const int j = in_adjncy[k];
+                if ( j > i ){
+                    out_adjncy[cnt] = j;
+                    cnt++;
+                }
+            }
+        }
+        out_xadj[nv] = cnt;
+    }
+
 }

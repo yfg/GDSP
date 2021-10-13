@@ -8,6 +8,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Julia REQUIRED)
 find_program(JULIA_BIN_PATH NAMES julia)
 
+find_package(MKL)
+
 # Get the latest abbreviated commit hash of the working branch
 execute_process(
   COMMAND git log -1 --format=%h
@@ -33,6 +35,8 @@ add_subdirectory(external/mt-metis-0.7.2)
 add_executable(sppart_test bin/sppart_test.cpp)
 add_executable(metis_test bin/metis_test.cpp)
 add_executable(mtmetis_test bin/mtmetis_test.cpp)
+add_executable(metis_nd_test bin/metis_nd_test.cpp)
+
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
     ${Julia_INCLUDE_DIRS}
@@ -46,6 +50,7 @@ add_library(sppart_blas_lapack STATIC src/blas_lapack_interface.f90)
 target_link_libraries(sppart_test sppart_blas_lapack ${LAPACK_LIBRARIES} julia)
 target_link_libraries(metis_test metis julia)
 target_link_libraries(mtmetis_test mtmetis wildriver julia)
+target_link_libraries(metis_nd_test metis julia ${MKL_LIBRARIES})
 
 find_package(OpenMP)
 if(OpenMP_FOUND)
