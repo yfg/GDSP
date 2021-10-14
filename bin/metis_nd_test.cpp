@@ -51,7 +51,7 @@ int main(int argc, char* argv[]){
     int ret = METIS_SetDefaultOptions(metis_options);
     // metis_options[METIS_OPTION_DBGLVL] = METIS_DBG_INFO;
     metis_options[METIS_OPTION_SEED] = rand_seed;
-    auto perm = Sppart::create_up_array<MKL_INT>(nv);
+    auto perm = Sppart::create_up_array<int>(nv);
     auto inv_perm = Sppart::create_up_array<int>(nv);
 
     ret = METIS_NodeND(&nv, xadj.data(), adjncy.data(), NULL, metis_options, perm.get(), inv_perm.get());
@@ -64,19 +64,28 @@ int main(int argc, char* argv[]){
     std::vector<int> adjncy_upt;
     Sppart::create_upper_triangular(nv, xadj, adjncy, xadj_upt, adjncy_upt);
 
+    std::vector<long long int> xadj_pds(xadj_upt.size());
+    std::vector<long long int> adjncy_pds(adjncy_upt.size());
+    auto perm_pds = Sppart::create_up_array<long long int>(nv);
+    for (size_t i = 0; i < xadj_upt.size(); ++i) xadj_pds[i] = xadj_upt[i];
+    for (size_t i = 0; i < adjncy_upt.size(); ++i) adjncy_pds[i] = adjncy_upt[i];
+    for (size_t i = 0; i < nv; ++i) perm_pds[i] = perm[i];
+
     _MKL_DSS_HANDLE_t pt[64];
-    const MKL_INT mtype = -2; // real and symmetric indefinite
-    MKL_INT iparm[64];
+    const long long int mtype = -2; // real and symmetric indefinite
+    long long int iparm[64];
+    for (int i = 0; i < 64; ++i){
+        pt[i] = 0;
+        iparm[i] = 0;
+    }
 
-    pardisoinit(pt, &mtype, iparm);
-
-    const MKL_INT maxfct = 1, mnum = 1, nrhs=1;
-    const MKL_INT msglvl = 0; // 0: Do not print information, 1: print information
-    const MKL_INT n = nv;
-    const MKL_INT phase = 11; // Only analysis phase
-    MKL_INT error;
-    auto val = Sppart::create_up_array<double>(adjncy_upt.size());
-    for (size_t i = 0; i < adjncy_upt.size(); ++i){
+    const long long int maxfct = 1, mnum = 1, nrhs=1;
+    const long long int msglvl = 0; // 0: Do not print information, 1: print information
+    const long long int n = nv;
+    const long long int phase = 11; // Only analysis phase
+    long long int error;
+    auto val = Sppart::create_up_array<double>(adjncy_pds.size());
+    for (size_t i = 0; i < adjncy_pds.size(); ++i){
         val[i] = 1.0;
     }
     iparm[0] = 1; // use non default values
@@ -84,12 +93,12 @@ int main(int argc, char* argv[]){
     iparm[17] = -1; // Enable reporting the number of non-zero elements in the factors
     iparm[34] = 1; // Zero-based indexing
     
-    pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, val.get(), xadj_upt.data(), adjncy_upt.data(), perm.get(), &nrhs, iparm, &msglvl, NULL, NULL, &error);
+    pardiso_64(pt, &maxfct, &mnum, &mtype, &phase, &n, val.get(), xadj_pds.data(), adjncy_pds.data(), perm_pds.get(), &nrhs, iparm, &msglvl, NULL, NULL, &error);  
     if ( error != 0 ){
-        printf("Pardiso error! error code = %d\n", error);
+        printf("Pardiso error! error code = %lld\n", error);
         std::terminate();
     }
-    printf("Number of non-zero elements in the factors: %d\n", iparm[17]);
+    printf("Number of non-zero elements in the factors: %lld\n", iparm[17]);
 
     return 0;
 }
