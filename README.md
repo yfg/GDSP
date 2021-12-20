@@ -19,7 +19,8 @@ BibTeX entry:
 ```
 
 # Requirement
-* C++11 compiler
+* C and C++11 compiler (e.g. `gcc/g++`)
+* Fortran compiler supporting `ISO_C_BINDING` (e.g. `gfortran`)
 * CMake 3.1+
 * [Julia](https://julialang.org/) 1.3.1+ with [`MAT.jl`](https://github.com/JuliaIO/MAT.jl) package (used to read MATLAB .mat files)
 * BLAS/LAPACK library (e.g. those in Intel MKL)
