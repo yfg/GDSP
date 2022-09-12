@@ -30,6 +30,7 @@ BibTeX entry:
 $ # assume that the path to a Julia executable is in $PATH
 $ mkdir build && cd build
 $ cmake .. -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_FLAGS="-O3 -DNDEBUG" -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG"
+$ make
 ```
 
 # Usage
